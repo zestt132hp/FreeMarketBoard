@@ -1,4 +1,6 @@
 import { users, ads, cartItems, type User, type InsertUser, type Ad, type InsertAd, type CartItem, type InsertCartItem } from "@shared/schema";
+import { db } from "./db";
+import { eq, ilike, and, or } from "drizzle-orm";
 
 export interface IStorage {
   // User operations
@@ -248,4 +250,103 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+export class DatabaseStorage implements IStorage {
+  async getUser(id: number): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
+  }
+
+  async getUserByPhone(phone: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.phone, phone));
+    return user || undefined;
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const [user] = await db
+      .insert(users)
+      .values(insertUser)
+      .returning();
+    return user;
+  }
+
+  async getAds(category?: string, search?: string): Promise<Ad[]> {
+    const conditions = [];
+    
+    if (category && category !== "all") {
+      conditions.push(ilike(ads.category, category));
+    }
+    
+    if (search) {
+      conditions.push(
+        or(
+          ilike(ads.title, `%${search}%`),
+          ilike(ads.fullDescription, `%${search}%`),
+          ilike(ads.shortDescription, `%${search}%`)
+        )
+      );
+    }
+    
+    if (conditions.length > 0) {
+      return await db.select().from(ads).where(and(...conditions));
+    }
+    
+    return await db.select().from(ads);
+  }
+
+  async getAd(id: number): Promise<Ad | undefined> {
+    const [ad] = await db.select().from(ads).where(eq(ads.id, id));
+    return ad || undefined;
+  }
+
+  async createAd(insertAd: InsertAd): Promise<Ad> {
+    const [ad] = await db
+      .insert(ads)
+      .values(insertAd)
+      .returning();
+    return ad;
+  }
+
+  async getUserAds(userId: number): Promise<Ad[]> {
+    return await db.select().from(ads).where(eq(ads.userId, userId));
+  }
+
+  async updateAd(id: number, updateData: Partial<Ad>): Promise<Ad | undefined> {
+    const [ad] = await db
+      .update(ads)
+      .set(updateData)
+      .where(eq(ads.id, id))
+      .returning();
+    return ad || undefined;
+  }
+
+  async deleteAd(id: number): Promise<boolean> {
+    const result = await db.delete(ads).where(eq(ads.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async getCartItems(userId: number): Promise<CartItem[]> {
+    return await db.select().from(cartItems).where(eq(cartItems.userId, userId));
+  }
+
+  async addToCart(insertCartItem: InsertCartItem): Promise<CartItem> {
+    const [cartItem] = await db
+      .insert(cartItems)
+      .values(insertCartItem)
+      .returning();
+    return cartItem;
+  }
+
+  async removeFromCart(userId: number, adId: number): Promise<boolean> {
+    const result = await db
+      .delete(cartItems)
+      .where(and(eq(cartItems.userId, userId), eq(cartItems.adId, adId)));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async clearCart(userId: number): Promise<boolean> {
+    const result = await db.delete(cartItems).where(eq(cartItems.userId, userId));
+    return (result.rowCount || 0) > 0;
+  }
+}
+
+export const storage = new DatabaseStorage();

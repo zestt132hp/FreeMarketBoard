@@ -23,11 +23,11 @@ This is a full-stack classified ads application called "AdBoard" built with Reac
 - **Development**: Hot reloading with Vite middleware integration
 
 ### Database Design
-- **Primary Database**: PostgreSQL (via Neon serverless)
-- **Schema Management**: Drizzle Kit for migrations
+- **Primary Database**: PostgreSQL (Replit native database)
+- **Schema Management**: Drizzle Kit for migrations and schema management
 - **Tables**: 
-  - `users` - User accounts with phone-based authentication
-  - `ads` - Classified advertisements with images, location, and specifications
+  - `users` - User accounts with phone-based authentication and timestamps
+  - `ads` - Classified advertisements with images, location, specifications, and full descriptions
   - `cart_items` - Shopping cart functionality linking users to ads
 
 ## Key Components
@@ -113,7 +113,10 @@ This is a full-stack classified ads application called "AdBoard" built with Reac
 
 ```
 Changelog:
-- June 25, 2025. Initial setup
+- June 25, 2025. Initial setup with in-memory storage
+- June 25, 2025. Added PostgreSQL database integration with Drizzle ORM
+- June 25, 2025. Migrated from MemStorage to DatabaseStorage implementation
+- June 25, 2025. Successfully deployed sample data to PostgreSQL database
 ```
 
 ## User Preferences
