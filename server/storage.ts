@@ -1,6 +1,7 @@
-import { users, ads, cartItems, type User, type InsertUser, type Ad, type InsertAd, type CartItem, type InsertCartItem } from "@shared/schema";
+import { users, ads, cartItems, type User, type InsertUser, type Ad, type InsertAd, type CartItem, type InsertCartItem } from "../shared/schema";
 import { db } from "./db";
 import { eq, ilike, and, or } from "drizzle-orm";
+import { logger } from "./logger"
 
 export interface IStorage {
   // User operations
@@ -252,8 +253,19 @@ export class MemStorage implements IStorage {
 
 export class DatabaseStorage implements IStorage {
   async getUser(id: number): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
-    return user || undefined;
+    try{
+      const [user] = await db.select().from(users).where(eq(users.id, id));
+      return user || undefined;
+    }
+    catch(error){
+      logger.error('Database query failed', { 
+      query: 'getUser',
+      params: { id },
+      error 
+    });
+
+    throw error;    
+    }
   }
 
   async getUserByPhone(phone: string): Promise<User | undefined> {

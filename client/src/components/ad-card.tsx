@@ -1,7 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MapPin, Clock } from "lucide-react";
-import type { Ad } from "@shared/schema";
+import type { Ad } from "../../../shared/schema";
 import { formatDistanceToNow } from "date-fns";
 
 interface AdCardProps {

@@ -1,9 +1,10 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { loginSchema, insertUserSchema, insertAdSchema, insertCartItemSchema } from "@shared/schema";
+import { loginSchema, insertUserSchema, insertAdSchema, insertCartItemSchema } from "../shared/schema";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import { logger } from './logger';
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 
@@ -31,14 +32,37 @@ function authenticateToken(req: Request, res: Response, next: NextFunction) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Добавляем middleware для логирования запросов
+    app.use((req, res, next) => {
+    logger.info(`${req.method} ${req.originalUrl}`);
+    next();
+  });
+
+  // Добавляем обработчик ошибок БД
+  app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+    logger.error('Database error', { 
+      error: err.message,
+      stack: err.stack,
+      query: err.query,
+      parameters: err.parameters
+    });
+    
+    if (err.name === 'DatabaseError') {
+      return res.status(503).json({ message: "Service temporarily unavailable" });
+    }
+    next(err);
+  });
+
   // Auth routes
   app.post("/api/register", async (req, res) => {
     try {
+      logger.debug('Registration attempt', { phone: req.body.phone });
       const userData = insertUserSchema.parse(req.body);
       
       // Check if user already exists
       const existingUser = await storage.getUserByPhone(userData.phone);
       if (existingUser) {
+        logger.warn('Registration failed - user exists', { phone: userData.phone });
         return res.status(400).json({ message: "User with this phone number already exists" });
       }
       
@@ -53,7 +77,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Generate token
       const token = jwt.sign({ userId: user.id, phone: user.phone }, JWT_SECRET);
-      
+      logger.info('User registered successfully', { userId: user.id });
+
       res.json({
         token,
         user: {
@@ -63,6 +88,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       });
     } catch (error) {
+      logger.error('Registration error', { error });
       res.status(400).json({ message: "Invalid registration data" });
     }
   });
@@ -95,6 +121,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       });
     } catch (error) {
+      logger.error('Invalid login data', { error });
       res.status(400).json({ message: "Invalid login data" });
     }
   });
@@ -113,6 +140,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         phone: user.phone,
       });
     } catch (error) {
+      logger.error('Server error', { error });
       res.status(500).json({ message: "Server error" });
     }
   });
@@ -127,6 +155,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       res.json(ads);
     } catch (error) {
+      logger.error('Server error', { 
+        error: error instanceof Error ? {
+        message: error.message,
+        stack: error.stack,
+        ...(error as any).response?.data && { response: (error as any).response.data }
+  } : error});
       res.status(500).json({ message: "Server error" });
     }
   });
@@ -146,12 +180,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({
         ...ad,
         seller: seller ? {
-          id: seller.id,
+          id: seller.id,  
           name: seller.name,
           phone: seller.phone,
         } : null,
       });
     } catch (error) {
+      logger.error('Server error', { error });
       res.status(500).json({ message: "Server error" });
     }
   });
@@ -177,6 +212,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const ads = await storage.getUserAds(authReq.user.userId);
       res.json(ads);
     } catch (error) {
+      logger.error('Server error', { error });
       res.status(500).json({ message: "Server error" });
     }
   });
@@ -200,6 +236,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json(itemsWithAds);
     } catch (error) {
+      logger.error('Server error', { error });
       res.status(500).json({ message: "Server error" });
     }
   });
@@ -246,5 +283,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const httpServer = createServer(app);
+
+  httpServer.on('listening', () => {
+    const addr = httpServer.address();
+    const bind = typeof addr === 'string' ? addr : `${addr?.port}`;
+    logger.info(`Server started on port ${bind}`);
+  });
+
+  httpServer.on('error', (error) => {
+    logger.error('Server error', { error });
+  });
+
   return httpServer;
 }

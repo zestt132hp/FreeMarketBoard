@@ -7,8 +7,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
-import { loginSchema, insertUserSchema } from "@shared/schema";
-import type { LoginData, InsertUser } from "@shared/schema";
+import { loginSchema, insertUserSchema } from "../../../shared/schema";
+import type { LoginData, InsertUser } from "../../../shared/schema";
 
 interface AuthModalProps {
   isOpen: boolean;

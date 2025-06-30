@@ -13,7 +13,7 @@ import {
   Star,
   User
 } from "lucide-react";
-import type { Ad } from "@shared/schema";
+import type { Ad } from "../../../shared/schema";
 import { useCart } from "@/hooks/use-cart";
 import { formatDistanceToNow } from "date-fns";
 

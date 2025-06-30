@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Edit, Trash2, Eye } from "lucide-react";
 import { useLocation } from "wouter";
-import type { Ad } from "@shared/schema";
+import type { Ad } from "../../../shared/schema";
 
 export default function Dashboard() {
   const { user, isAuthenticated } = useAuth();

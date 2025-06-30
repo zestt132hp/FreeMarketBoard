@@ -3,14 +3,19 @@
   "version": "1.0.0",
   "type": "module",
   "license": "MIT",
+  "exports":{
+    "./vite.config": "./vite.config.ts"
+  },
   "scripts": {
-    "dev": "NODE_ENV=development tsx server/index.ts",
-    "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
-    "start": "NODE_ENV=production node dist/index.js",
+    "build": "vite build",
+    "dev": "vite dev",
+    "preview": "vite preview",
+    "start": "NODE_ENV=production node server/index.js",
     "check": "tsc",
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
+    "winston":"^3.11.0",
     "@hookform/resolvers": "^3.10.0",
     "@jridgewell/trace-mapping": "^0.3.25",
     "@neondatabase/serverless": "^0.10.4",

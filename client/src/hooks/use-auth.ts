@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { authStorage, createAuthHeaders } from "@/lib/auth";
-import type { User, LoginData, InsertUser } from "@shared/schema";
+import type { User, LoginData, InsertUser } from "../../../shared/schema";
 
 interface AuthContextType {
   user: User | null;

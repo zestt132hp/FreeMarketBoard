@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { categories } from "@shared/schema";
+import { categories } from "../../../shared/schema";
 import * as Icons from "lucide-react";
 
 interface CategoryNavProps {
