@@ -6,15 +6,22 @@
     "configurations": [
     {
       "type": "node",
-      "request": "launch",
-      "name": "Launch Server",
+      "request": "attach",
+      "name": "Attach to Backend",
+      "port": 9229,
+      "restart": true,
       "skipFiles": ["<node_internals>/**"],
-      "program": "${workspaceFolder}/server/index.ts",
-      "outFiles": ["${workspaceFolder}/**/*.js"],
-      "env": {
-        "NODE_ENV": "development",
-        "DATABASE_URL": "postgres://postgres:postgres@localhost:32768/rest_express",
-        "JWT_SECRET": "your-secret-key"
+      "localRoot": "${workspaceFolder}/server",
+      "remoteRoot": "/app/server"
+    },
+    {
+      "type": "chrome",
+      "request": "launch",
+      "name": "Debug Frontend",
+      "url": "http://localhost:3000",
+      "webRoot": "${workspaceFolder}/client",
+      "sourceMapPathOverrides": {
+        "/app/client/*": "${workspaceFolder}/client/*"
       }
     }
   ]

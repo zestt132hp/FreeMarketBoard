@@ -7,7 +7,7 @@ services:
       - "5000:5000"
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=postgres://postgres:postgres@host.docker.internal:32768/rest_express
+      - DATABASE_URL=postgres://admin:qwerty123@host.docker.internal:32768/postgres
       - JWT_SECRET=your-secret-key
     extra_hosts:
       - "host.docker.internal:host-gateway"

@@ -333,7 +333,7 @@ export class DatabaseStorage implements IStorage {
 
   async deleteAd(id: number): Promise<boolean> {
     const result = await db.delete(ads).where(eq(ads.id, id));
-    return (result.rowCount || 0) > 0;
+    return (result.count || 0) > 0;
   }
 
   async getCartItems(userId: number): Promise<CartItem[]> {
@@ -352,12 +352,12 @@ export class DatabaseStorage implements IStorage {
     const result = await db
       .delete(cartItems)
       .where(and(eq(cartItems.userId, userId), eq(cartItems.adId, adId)));
-    return (result.rowCount || 0) > 0;
+    return (result.count || 0) > 0;
   }
 
   async clearCart(userId: number): Promise<boolean> {
     const result = await db.delete(cartItems).where(eq(cartItems.userId, userId));
-    return (result.rowCount || 0) > 0;
+    return (result.count || 0) > 0;
   }
 }
 

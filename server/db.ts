@@ -1,10 +1,9 @@
-import { Pool, neonConfig } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-serverless';
-import ws from "ws";
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
 import * as schema from "../shared/schema";
 import { logger } from './logger';
 
-neonConfig.webSocketConstructor = ws;
+const connectionString = process.env.DATABASE_URL!;
 
 if (!process.env.DATABASE_URL) {
   throw new Error(
@@ -12,11 +11,13 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-pool.on('connect', () =>{
-  logger.info('Connected to database');
-})
-pool.on('error', (err) => {
-  logger.error('Database connection error', { error: err });
+const client = postgres(connectionString, {
+  onnotice: (notice) => logger.info('Postgres Notice:', notice),
+  onparameter: (key, value) => logger.info(`Parameter ${key} = ${value}`),
+  debug: (connection, query, params) => {
+    logger.debug('Executing query:', query);
+    if (params.length) logger.debug('Query params:', params);
+  },
 });
-export const db = drizzle({ client: pool, schema });
+
+export const db = drizzle(client, { schema });
