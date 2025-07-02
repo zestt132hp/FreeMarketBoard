@@ -74,7 +74,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...userData,
         password: hashedPassword,
       });
-      
+
       // Generate token
       const token = jwt.sign({ userId: user.id, phone: user.phone }, JWT_SECRET);
       logger.info('User registered successfully', { userId: user.id });

@@ -3,7 +3,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 export const users = pgTable("users", {
-  id: serial("id").primaryKey(),
+  id: serial("id").notNull().primaryKey(),
   name: text("name").notNull(),
   phone: text("phone").notNull().unique(),
   password: text("password").notNull(),
@@ -11,7 +11,7 @@ export const users = pgTable("users", {
 });
 
 export const ads = pgTable("ads", {
-  id: serial("id").primaryKey(),
+  id: serial("id").notNull().primaryKey(),
   title: text("title").notNull(),
   shortDescription: text("short_description").notNull(),
   fullDescription: text("full_description").notNull(),
@@ -52,8 +52,8 @@ export const insertCartItemSchema = createInsertSchema(cartItems).omit({
 
 // Login schema
 export const loginSchema = z.object({
-  phone: z.string().min(10, "Phone number must be at least 10 digits"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  phone: z.string().min(10, "Номер телефона должен содержать не менее 10 цифр."),
+  password: z.string().min(6, "Пароль должен содержать не менее 6 символов"),
 });
 
 // Types
@@ -67,11 +67,11 @@ export type LoginData = z.infer<typeof loginSchema>;
 
 // Categories
 export const categories = [
-  { id: "all", name: "All Categories", icon: "th-large" },
-  { id: "electronics", name: "Electronics", icon: "laptop" },
-  { id: "furniture", name: "Furniture", icon: "couch" },
-  { id: "cars", name: "Cars", icon: "car" },
-  { id: "work", name: "Jobs", icon: "briefcase" },
-  { id: "clothing", name: "Clothing", icon: "tshirt" },
-  { id: "home", name: "Home & Garden", icon: "home" },
+  { id: "all", name: "Все Категории", icon: "th-large" },
+  { id: "electronics", name: "Электроника", icon: "laptop" },
+  { id: "furniture", name: "Мебель", icon: "couch" },
+  { id: "cars", name: "Автомобили", icon: "car" },
+  { id: "work", name: "Работа", icon: "briefcase" },
+  { id: "clothing", name: "Одежда", icon: "tshirt" },
+  { id: "home", name: "Дом & Сад", icon: "home" },
 ];

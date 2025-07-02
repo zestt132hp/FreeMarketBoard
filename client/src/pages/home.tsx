@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { Ad } from "../../../shared/schema";
+import { logger } from '@/lib/logger';
 
 export default function Home() {
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -83,6 +84,7 @@ export default function Home() {
       }
       setShowAdDetail(true);
     } catch (error) {
+      logger.error("Ошибка UI", error);
       setSelectedAd(ad);
       setShowAdDetail(true);
     }
@@ -99,13 +101,13 @@ export default function Home() {
           <div className="bg-white p-4 rounded-lg shadow-sm">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
-                <Label className="text-sm font-medium text-gray-700">Price:</Label>
+                <Label className="text-sm font-medium text-gray-700">Цена:</Label>
                 <Select value={priceFilter} onValueChange={setPriceFilter}>
                   <SelectTrigger>
                     <SelectValue placeholder="Any Price" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="any">Any Price</SelectItem>
+                    <SelectItem value="any">Любая Цена</SelectItem>
                     <SelectItem value="0-100">$0 - $100</SelectItem>
                     <SelectItem value="100-500">$100 - $500</SelectItem>
                     <SelectItem value="500-1000">$500 - $1000</SelectItem>
@@ -115,24 +117,24 @@ export default function Home() {
               </div>
 
               <div>
-                <Label className="text-sm font-medium text-gray-700">Location:</Label>
+                <Label className="text-sm font-medium text-gray-700">Местоположение:</Label>
                 <Input
-                  placeholder="Enter city..."
+                  placeholder="Введите город..."
                   value={locationFilter}
                   onChange={(e) => setLocationFilter(e.target.value)}
                 />
               </div>
 
               <div>
-                <Label className="text-sm font-medium text-gray-700">Sort by:</Label>
+                <Label className="text-sm font-medium text-gray-700">Сортировать:</Label>
                 <Select value={sortBy} onValueChange={setSortBy}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="recent">Most Recent</SelectItem>
-                    <SelectItem value="price-low">Price: Low to High</SelectItem>
-                    <SelectItem value="price-high">Price: High to Low</SelectItem>
+                    <SelectItem value="recent">По популярности</SelectItem>
+                    <SelectItem value="price-low">Цена: от Меньшей к Большей</SelectItem>
+                    <SelectItem value="price-high">Цена: от Большей к Меньшей</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -146,7 +148,7 @@ export default function Home() {
                     setSortBy("recent");
                   }}
                 >
-                  Clear Filters
+                  Очистить фильтр
                 </Button>
               </div>
             </div>
@@ -161,8 +163,8 @@ export default function Home() {
         ) : filteredAds.length === 0 ? (
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
-              <p className="text-gray-500 text-lg">No ads found</p>
-              <p className="text-gray-400">Try adjusting your filters or search terms</p>
+              <p className="text-gray-500 text-lg">Объявления ненайдены</p>
+              <p className="text-gray-400">Попробуйте настроить фильтры или условия поиска.</p>
             </div>
           </div>
         ) : (

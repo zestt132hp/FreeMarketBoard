@@ -43,13 +43,13 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
       await login(data);
       onClose();
       toast({
-        title: "Welcome back!",
-        description: "You have been successfully logged in.",
+        title: "С возвращением!",
+        description: "Вы успешно вошли в своё учётную запись!",
       });
     } catch (error) {
       toast({
-        title: "Login failed",
-        description: "Invalid phone number or password.",
+        title: "Ошибка входа",
+        description: "Неверный номер телефона или пароль.",
         variant: "destructive",
       });
     }
@@ -60,13 +60,13 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
       await register(data);
       onClose();
       toast({
-        title: "Welcome!",
-        description: "Your account has been created successfully.",
+        title: "Добро пожаловать!",
+        description: "Ваш аккаунт был успешно создан.",
       });
     } catch (error) {
       toast({
-        title: "Registration failed",
-        description: "An error occurred while creating your account.",
+        title: "Ошибка регистрации!",
+        description: "Произошла ошибка при создании вашей учетной записи.",
         variant: "destructive",
       });
     }
@@ -87,14 +87,14 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-2xl">
-            {mode === "login" ? "Login" : "Register"}
+            {mode === "login" ? "Вход" : "Регистрация"}
           </DialogTitle>
         </DialogHeader>
 
         {mode === "login" ? (
           <form onSubmit={loginForm.handleSubmit(handleLogin)} className="space-y-4">
             <div>
-              <Label htmlFor="phone">Phone Number</Label>
+              <Label htmlFor="phone">Номер телефона</Label>
               <Input
                 id="phone"
                 type="tel"
@@ -109,11 +109,11 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
             </div>
 
             <div>
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">Пароль</Label>
               <Input
                 id="password"
                 type="password"
-                placeholder="Enter your password"
+                placeholder="Введите ваш пароль"
                 {...loginForm.register("password")}
               />
               {loginForm.formState.errors.password && (
@@ -124,25 +124,25 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
             </div>
 
             <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? "Logging in..." : "Login"}
+              {isLoading ? "Logging in..." : "Вход"}
             </Button>
 
             <div className="text-center">
-              <span className="text-sm text-gray-600">Don't have an account? </span>
+              <span className="text-sm text-gray-600">Ещё нет учётной записи? </span>
               <Button
                 type="button"
                 variant="link"
                 className="p-0 h-auto text-primary"
                 onClick={switchToRegister}
               >
-                Register
+                Регистрация
               </Button>
             </div>
           </form>
         ) : (
           <form onSubmit={registerForm.handleSubmit(handleRegister)} className="space-y-4">
             <div>
-              <Label htmlFor="name">Full Name</Label>
+              <Label htmlFor="name">Полное имя</Label>
               <Input
                 id="name"
                 type="text"
@@ -157,7 +157,7 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
             </div>
 
             <div>
-              <Label htmlFor="phone">Phone Number</Label>
+              <Label htmlFor="phone">Номер телефона</Label>
               <Input
                 id="phone"
                 type="tel"
@@ -172,11 +172,11 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
             </div>
 
             <div>
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">Пароль</Label>
               <Input
                 id="password"
                 type="password"
-                placeholder="Create a password"
+                placeholder="Укажите пароль"
                 {...registerForm.register("password")}
               />
               {registerForm.formState.errors.password && (
@@ -187,18 +187,18 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
             </div>
 
             <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? "Creating account..." : "Register"}
+              {isLoading ? "Creating account..." : "Регистрация"}
             </Button>
 
             <div className="text-center">
-              <span className="text-sm text-gray-600">Already have an account? </span>
+              <span className="text-sm text-gray-600">Уже зарегестрированы? </span>
               <Button
                 type="button"
                 variant="link"
                 className="p-0 h-auto text-primary"
                 onClick={switchToLogin}
               >
-                Login
+                Вход
               </Button>
             </div>
           </form>

@@ -6,7 +6,19 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), {
+    name: 'log-to-backend',
+      configureServer(server) {
+        server.middlewares.use('/client-log', (req, res) => {
+          let body = '';
+          req.on('data', chunk => body += chunk);
+          req.on('end', () => {
+            console.log('[CLIENT LOG]', JSON.parse(body));
+            res.end();
+          });
+        });
+      }
+  }],
   root: path.join(__dirname, "client"),
   build: {
     outDir: path.join(__dirname, "dist"),  // Исправленный путь без опечатки

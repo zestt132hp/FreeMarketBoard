@@ -138,7 +138,7 @@ export function AdDetailModal({ isOpen, onClose, ad }: AdDetailModalProps) {
             {/* Product Specifications */}
             {Object.keys(specifications).length > 0 && (
               <div>
-                <h3 className="text-lg font-semibold mb-3">Specifications</h3>
+                <h3 className="text-lg font-semibold mb-3">Спецификация</h3>
                 <div className="space-y-2">
                   {Object.entries(specifications).map(([key, value]) => (
                     <div key={key} className="flex justify-between">
@@ -154,7 +154,7 @@ export function AdDetailModal({ isOpen, onClose, ad }: AdDetailModalProps) {
 
             {/* Description */}
             <div>
-              <h3 className="text-lg font-semibold mb-3">Description</h3>
+              <h3 className="text-lg font-semibold mb-3">Описание</h3>
               <p className="text-gray-700 leading-relaxed">
                 {ad.fullDescription}
               </p>
@@ -167,7 +167,7 @@ export function AdDetailModal({ isOpen, onClose, ad }: AdDetailModalProps) {
                 onClick={handleAddToCart}
               >
                 <ShoppingCart className="mr-2 h-4 w-4" />
-                Add to Cart
+                Добавить в корзину
               </Button>
               {ad.seller?.phone && (
                 <Button
@@ -176,7 +176,7 @@ export function AdDetailModal({ isOpen, onClose, ad }: AdDetailModalProps) {
                   onClick={handleContactSeller}
                 >
                   <Phone className="mr-2 h-4 w-4" />
-                  Contact Seller
+                  Связаться с продавцом
                 </Button>
               )}
             </div>

@@ -110,13 +110,13 @@ export function Header({ searchTerm, onSearchChange }: HeaderProps) {
                     size="sm"
                     onClick={handleLogin}
                   >
-                    Login
+                    Вход
                   </Button>
                   <Button
                     size="sm"
                     onClick={handleRegister}
                   >
-                    Register
+                    Регистрация
                   </Button>
                 </div>
               )}
