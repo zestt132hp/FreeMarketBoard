@@ -217,6 +217,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put("/api/ads/:id", authenticateToken, async (req, res) => {
+    try {
+      const authReq = req as AuthenticatedRequest;
+      const id = parseInt(req.params.id);
+      
+      // Get existing ad to verify ownership
+      const existingAd = await storage.getAd(id);
+      if (!existingAd) {
+        return res.status(404).json({ message: "Ad not found" });
+      }
+      
+      // Verify ownership
+      if (existingAd.userId !== authReq.user.userId) {
+        return res.status(403).json({ message: "You can only edit your own ads" });
+      }
+      
+      const updateData = insertAdSchema.partial().parse(req.body);
+      const updatedAd = await storage.updateAd(id, updateData);
+      
+      if (!updatedAd) {
+        return res.status(404).json({ message: "Failed to update ad" });
+      }
+      
+      res.json(updatedAd);
+    } catch (error) {
+      logger.error('Update ad error', { error });
+      res.status(400).json({ message: "Invalid ad data" });
+    }
+  });
+
+  app.delete("/api/ads/:id", authenticateToken, async (req, res) => {
+    try {
+      const authReq = req as AuthenticatedRequest;
+      const id = parseInt(req.params.id);
+      
+      // Get existing ad to verify ownership
+      const existingAd = await storage.getAd(id);
+      if (!existingAd) {
+        return res.status(404).json({ message: "Ad not found" });
+      }
+      
+      // Verify ownership
+      if (existingAd.userId !== authReq.user.userId) {
+        return res.status(403).json({ message: "You can only delete your own ads" });
+      }
+      
+      const success = await storage.deleteAd(id);
+      
+      if (!success) {
+        return res.status(404).json({ message: "Failed to delete ad" });
+      }
+      
+      res.json({ message: "Ad deleted successfully" });
+    } catch (error) {
+      logger.error('Delete ad error', { error });
+      res.status(500).json({ message: "Server error" });
+    }
+  });
+
   // Cart routes
   app.get("/api/cart", authenticateToken, async (req, res) => {
     try {
