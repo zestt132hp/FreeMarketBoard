@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { createAuthHeaders } from "@/lib/auth";
 import { Header } from "@/components/header";
@@ -9,11 +9,17 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Edit, Trash2, Eye } from "lucide-react";
 import { useLocation } from "wouter";
 import type { Ad } from "../../../shared/schema";
+import AdModal from "@/components/ad-modal";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Dashboard() {
   const { user, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedAd, setSelectedAd] = useState<Ad | null>(null);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   // Redirect if not authenticated
   if (!isAuthenticated) {
@@ -33,26 +39,133 @@ export default function Dashboard() {
     },
   });
 
+  // Create ad mutation
+  const createAdMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await fetch("/api/ads", {
+        method: "POST",
+        headers: {
+          ...createAuthHeaders(),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to create ad");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/my-ads"] });
+      setIsModalOpen(false);
+      toast({
+        title: "Объявление создано",
+        description: "Ваше объявление успешно добавлено",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Ошибка",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Update ad mutation
+  const updateAdMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const response = await fetch(`/api/ads/${id}`, {
+        method: "PUT",
+        headers: {
+          ...createAuthHeaders(),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to update ad");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/my-ads"] });
+      setIsModalOpen(false);
+      setSelectedAd(null);
+      toast({
+        title: "Объявление обновлено",
+        description: "Изменения успешно сохранены",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Ошибка",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete ad mutation
+  const deleteAdMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const response = await fetch(`/api/ads/${id}`, {
+        method: "DELETE",
+        headers: createAuthHeaders(),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to delete ad");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/my-ads"] });
+      toast({
+        title: "Объявление удалено",
+        description: "Объявление успешно удалено",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Ошибка",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleCreateAd = () => {
-    // TODO: Implement create ad modal/form
-    alert("Create ad functionality would be implemented here!");
+    setSelectedAd(null);
+    setIsModalOpen(true);
   };
 
   const handleEditAd = (ad: Ad) => {
-    // TODO: Implement edit ad functionality
-    alert(`Edit ad functionality for "${ad.title}" would be implemented here!`);
+    setSelectedAd(ad);
+    setIsModalOpen(true);
   };
 
   const handleDeleteAd = (ad: Ad) => {
-    // TODO: Implement delete ad functionality
-    if (confirm(`Are you sure you want to delete "${ad.title}"?`)) {
-      alert("Delete functionality would be implemented here!");
+    if (confirm(`Вы уверены, что хотите удалить "${ad.title}"?`)) {
+      deleteAdMutation.mutate(ad.id);
     }
   };
 
   const handleViewAd = (ad: Ad) => {
-    // TODO: Navigate to ad detail or open modal
-    alert(`View ad functionality for "${ad.title}" would be implemented here!`);
+    // Navigate to ad detail or open in new tab
+    window.open(`/ads/${ad.id}`, "_blank");
+  };
+
+  const handleSubmitAd = async (data: any) => {
+    if (selectedAd) {
+      // Update existing ad
+      updateAdMutation.mutate({ id: selectedAd.id, data });
+    } else {
+      // Create new ad
+      createAdMutation.mutate(data);
+    }
   };
 
   return (
@@ -63,11 +176,11 @@ export default function Dashboard() {
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-            <p className="text-gray-600">Welcome back, {user?.name}!</p>
+            <p className="text-gray-600">Добро пожаловать, {user?.name}!</p>
           </div>
           <Button onClick={handleCreateAd}>
             <Plus className="mr-2 h-4 w-4" />
-            Create Ad
+            Создать объявление
           </Button>
         </div>
 
@@ -75,7 +188,7 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Ads</CardTitle>
+              <CardTitle className="text-sm font-medium">Всего объявлений</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{userAds.length}</div>
@@ -84,7 +197,7 @@ export default function Dashboard() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Active Ads</CardTitle>
+              <CardTitle className="text-sm font-medium">Активные</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
@@ -95,7 +208,7 @@ export default function Dashboard() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Views</CardTitle>
+              <CardTitle className="text-sm font-medium">Просмотры</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">1,234</div>
@@ -106,21 +219,21 @@ export default function Dashboard() {
         {/* My Ads */}
         <Card>
           <CardHeader>
-            <CardTitle>My Ads</CardTitle>
+            <CardTitle>Мои объявления</CardTitle>
           </CardHeader>
           <CardContent>
             {isLoading ? (
               <div className="flex items-center justify-center h-32">
-                <p>Loading your ads...</p>
+                <p>Загрузка...</p>
               </div>
             ) : userAds.length === 0 ? (
               <div className="flex items-center justify-center h-32">
                 <div className="text-center">
-                  <p className="text-gray-500 text-lg">No ads yet</p>
-                  <p className="text-gray-400 mb-4">Create your first ad to get started</p>
+                  <p className="text-gray-500 text-lg">Нет объявлений</p>
+                  <p className="text-gray-400 mb-4">Создайте своё первое объявление</p>
                   <Button onClick={handleCreateAd}>
                     <Plus className="mr-2 h-4 w-4" />
-                    Create Ad
+                    Создать объявление
                   </Button>
                 </div>
               </div>
@@ -142,7 +255,7 @@ export default function Dashboard() {
                             ${parseFloat(ad.price).toLocaleString()}
                           </span>
                           <Badge variant={ad.isActive ? "default" : "secondary"}>
-                            {ad.isActive ? "Active" : "Inactive"}
+                            {ad.isActive ? "Активно" : "Неактивно"}
                           </Badge>
                         </div>
                       </div>
@@ -179,6 +292,15 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </main>
+
+      {/* Ad Modal for Create/Edit */}
+      <AdModal
+        open={isModalOpen}
+        onOpenChange={setIsModalOpen}
+        ad={selectedAd}
+        onSubmit={handleSubmitAd}
+        isLoading={createAdMutation.isPending || updateAdMutation.isPending}
+      />
     </div>
   );
 }
