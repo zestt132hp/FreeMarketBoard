@@ -2,14 +2,15 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { createAuthHeaders } from "@/lib/auth";
+import { getApiUrl } from "@/lib/queryClient";
 import { Header } from "@/components/header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Edit, Trash2, Eye } from "lucide-react";
 import { useLocation } from "wouter";
-import type { Ad } from "../../../shared/schema";
-import AdModal from "@/components/ad-modal";
+import type { Ad, Image as AdImage, AdWithRelations } from "../../../shared/schema";
+import AdModalV2 from "@/components/ad-modal-v2";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Dashboard() {
@@ -31,7 +32,7 @@ export default function Dashboard() {
   const { data: userAds = [], isLoading } = useQuery({
     queryKey: ["/api/my-ads"],
     queryFn: async () => {
-      const response = await fetch("/api/my-ads", {
+      const response = await fetch(getApiUrl("/api/my-ads"), {
         headers: createAuthHeaders(),
       });
       if (!response.ok) throw new Error("Failed to fetch ads");
@@ -42,19 +43,54 @@ export default function Dashboard() {
   // Create ad mutation
   const createAdMutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await fetch("/api/ads", {
-        method: "POST",
-        headers: {
-          ...createAuthHeaders(),
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
+      console.log('Create mutation called with data:', data);
+      
+      // Извлекаем изображения из данных
+      const { _images, ...adData } = data;
+      
+      // Создаём FormData для загрузки с изображениями
+      const formData = new FormData();
+      
+      // Добавляем данные объявления
+      Object.keys(adData).forEach(key => {
+        if (adData[key] !== null && adData[key] !== undefined) {
+          formData.append(key, String(adData[key]));
+        }
       });
+      
+      // Добавляем информацию об изображениях
+      if (_images && _images.length > 0) {
+        // Сортируем изображения по порядку
+        const sortedImages = [..._images].sort((a, b) => a.order - b.order);
+        
+        // Добавляем каждое изображение как отдельное поле
+        sortedImages.forEach((img, index) => {
+          // Для новых изображений используем их filename для поиска на сервере
+          formData.append(`images[${index}][filename]`, img.filename);
+          formData.append(`images[${index}][originalName]`, img.originalName);
+          formData.append(`images[${index}][order]`, String(index));
+          formData.append(`images[${index}][isPrimary]`, String(img.isPrimary));
+        });
+      }
+      
+      const response = await fetch(getApiUrl("/api/ads"), {
+        method: "POST",
+        headers: createAuthHeaders(),
+        // Content-Type будет установлен автоматически браузером для FormData
+        body: formData,
+      });
+      
+      console.log('Create response status:', response.status);
+      
       if (!response.ok) {
         const error = await response.json();
+        console.error('Create error:', error);
         throw new Error(error.message || "Failed to create ad");
       }
-      return response.json();
+      
+      const result = await response.json();
+      console.log('Create success:', result);
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/my-ads"] });
@@ -76,13 +112,36 @@ export default function Dashboard() {
   // Update ad mutation
   const updateAdMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: any }) => {
-      const response = await fetch(`/api/ads/${id}`, {
+      // Extract _images from data if present
+      const { _images, ...adData } = data;
+      
+      const formData = new FormData();
+      
+      // Append ad data
+      Object.keys(adData).forEach(key => {
+        if (adData[key] !== null && adData[key] !== undefined) {
+          formData.append(key, String(adData[key]));
+        }
+      });
+      
+      // Append images if present
+      if (_images && _images.length > 0) {
+        const sortedImages = [..._images].sort((a: any, b: any) => a.order - b.order);
+        sortedImages.forEach((img: any, index: number) => {
+          formData.append(`images[${index}][filename]`, img.filename);
+          formData.append(`images[${index}][originalName]`, img.originalName);
+          formData.append(`images[${index}][order]`, String(index));
+          formData.append(`images[${index}][isPrimary]`, String(img.isPrimary));
+          if (img.dbId) {
+            formData.append(`images[${index}][dbId]`, String(img.dbId));
+          }
+        });
+      }
+      
+      const response = await fetch(getApiUrl(`/api/ads/${id}`), {
         method: "PUT",
-        headers: {
-          ...createAuthHeaders(),
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
+        headers: createAuthHeaders(),
+        body: formData,
       });
       if (!response.ok) {
         const error = await response.json();
@@ -142,28 +201,33 @@ export default function Dashboard() {
     setIsModalOpen(true);
   };
 
-  const handleEditAd = (ad: Ad) => {
+  const handleEditAd = (ad: Ad | AdWithRelations) => {
     setSelectedAd(ad);
     setIsModalOpen(true);
   };
 
-  const handleDeleteAd = (ad: Ad) => {
+  const handleDeleteAd = (ad: Ad | AdWithRelations) => {
     if (confirm(`Вы уверены, что хотите удалить "${ad.title}"?`)) {
       deleteAdMutation.mutate(ad.id);
     }
   };
 
-  const handleViewAd = (ad: Ad) => {
+  const handleViewAd = (ad: Ad | AdWithRelations) => {
     // Navigate to ad detail or open in new tab
     window.open(`/ads/${ad.id}`, "_blank");
   };
 
   const handleSubmitAd = async (data: any) => {
+    console.log('Submitting ad data:', data);
+    console.log('Selected ad:', selectedAd);
+    
     if (selectedAd) {
       // Update existing ad
+      console.log('Calling update mutation for ad ID:', selectedAd.id);
       updateAdMutation.mutate({ id: selectedAd.id, data });
     } else {
       // Create new ad
+      console.log('Calling create mutation');
       createAdMutation.mutate(data);
     }
   };
@@ -175,7 +239,7 @@ export default function Dashboard() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+            <h1 className="text-3xl font-bold text-gray-900">Панель управления</h1>
             <p className="text-gray-600">Добро пожаловать, {user?.name}!</p>
           </div>
           <Button onClick={handleCreateAd}>
@@ -201,7 +265,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {userAds.filter(ad => ad.isActive).length}
+                {userAds.filter((ad: any) => ad.isActive).length}
               </div>
             </CardContent>
           </Card>
@@ -239,11 +303,17 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="space-y-4">
-                {userAds.map((ad) => (
+                {userAds.map((ad: any) => {
+                  // Get first image path from images array (new schema) or fallback to string (old schema)
+                  const firstImagePath = ad.images && ad.images.length > 0
+                    ? (ad.images[0] as AdImage).path || (ad.images[0] as string)
+                    : "https://via.placeholder.com/80x80";
+                  
+                  return (
                   <div key={ad.id} className="flex items-center justify-between p-4 border rounded-lg">
                     <div className="flex items-center space-x-4">
                       <img
-                        src={ad.images[0] || "https://via.placeholder.com/80x80"}
+                        src={firstImagePath}
                         alt={ad.title}
                         className="w-16 h-16 object-cover rounded-md"
                       />
@@ -286,7 +356,8 @@ export default function Dashboard() {
                       </Button>
                     </div>
                   </div>
-                ))}
+                );
+                })}
               </div>
             )}
           </CardContent>
@@ -294,7 +365,7 @@ export default function Dashboard() {
       </main>
 
       {/* Ad Modal for Create/Edit */}
-      <AdModal
+      <AdModalV2
         open={isModalOpen}
         onOpenChange={setIsModalOpen}
         ad={selectedAd}

@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  app:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgres://admin:StrongPass123!@postgres:5432/freemarketboards
+      - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+    depends_on:
+      - postgres
+    networks:
+      - freemarketboard-network
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=StrongPass123!
+      - POSTGRES_DB=freemarketboards
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - freemarketboard-network
+
+volumes:
+  postgres_data:
+
+networks:
+  freemarketboard-network:
+    driver: bridge

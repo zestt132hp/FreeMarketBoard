@@ -56,7 +56,7 @@ export function Header({ searchTerm, onSearchChange }: HeaderProps) {
               <div className="relative">
                 <Input
                   type="text"
-                  placeholder="Search ads..."
+                  placeholder="Поиск объявлений..."
                   value={searchTerm}
                   onChange={(e) => onSearchChange(e.target.value)}
                   className="pl-10"
@@ -95,11 +95,11 @@ export function Header({ searchTerm, onSearchChange }: HeaderProps) {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem asChild>
-                      <Link href="/dashboard">Dashboard</Link>
+                      <Link href="/dashboard">Панель управления</Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={logout}>
                       <LogOut className="mr-2 h-4 w-4" />
-                      Logout
+                      Выход
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>

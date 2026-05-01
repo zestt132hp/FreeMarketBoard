@@ -1,6 +1,6 @@
-import { users, ads, cartItems, type User, type InsertUser, type Ad, type InsertAd, type CartItem, type InsertCartItem } from "../shared/schema";
+import { users, ads, cartItems, categories, images, type User, type InsertUser, type Ad, type InsertAd, type CartItem, type InsertCartItem, type Category, type InsertCategory, type Image, type InsertImage, type AdWithRelations } from "../shared/schema";
 import { db } from "./db";
-import { eq, ilike, and, or } from "drizzle-orm";
+import { eq, ilike, and, or, asc, inArray } from "drizzle-orm";
 import { logger } from "./logger"
 
 export interface IStorage {
@@ -8,12 +8,24 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByPhone(phone: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUser(id: number, updates: Partial<User>): Promise<User | undefined>;
+  
+  // Category operations
+  getCategories(): Promise<Category[]>;
+  getCategoryBySlug(slug: string): Promise<Category | undefined>;
+  getCategoryById(id: number): Promise<Category | undefined>;
+  
+  // Image operations
+  getImagesByAdId(adId: number): Promise<Image[]>;
+  addImage(image: InsertImage): Promise<Image>;
+  addImages(imagesData: InsertImage[]): Promise<Image[]>;
+  deleteImagesByAdId(adId: number): Promise<boolean>;
   
   // Ad operations
-  getAds(category?: string, search?: string): Promise<Ad[]>;
-  getAd(id: number): Promise<Ad | undefined>;
+  getAds(category?: string, search?: string): Promise<AdWithRelations[]>;
+  getAd(id: number): Promise<AdWithRelations | undefined>;
   createAd(ad: InsertAd): Promise<Ad>;
-  getUserAds(userId: number): Promise<Ad[]>;
+  getUserAds(userId: number): Promise<(Ad & { images: Image[] })[]>;
   updateAd(id: number, ad: Partial<Ad>): Promise<Ad | undefined>;
   deleteAd(id: number): Promise<boolean>;
   
@@ -28,23 +40,45 @@ export class MemStorage implements IStorage {
   private users: Map<number, User>;
   private ads: Map<number, Ad>;
   private cartItems: Map<number, CartItem>;
+  private categories: Map<number, Category>;
+  private images: Map<number, Image>;
   private currentUserId: number;
   private currentAdId: number;
   private currentCartId: number;
+  private currentCategoryId: number;
+  private currentImageId: number;
 
   constructor() {
     this.users = new Map();
     this.ads = new Map();
     this.cartItems = new Map();
+    this.categories = new Map();
+    this.images = new Map();
     this.currentUserId = 1;
     this.currentAdId = 1;
     this.currentCartId = 1;
+    this.currentCategoryId = 1;
+    this.currentImageId = 1;
     
     // Initialize with some sample data
     this.initializeSampleData();
   }
 
   private initializeSampleData() {
+    // Sample categories
+    const sampleCategories = [
+      { id: 1, name: "Electronics", icon: "laptop", slug: "electronics", parentId: null },
+      { id: 2, name: "Furniture", icon: "couch", slug: "furniture", parentId: null },
+      { id: 3, name: "Cars", icon: "car", slug: "cars", parentId: null },
+      { id: 4, name: "Work", icon: "briefcase", slug: "work", parentId: null },
+      { id: 5, name: "Clothing", icon: "tshirt", slug: "clothing", parentId: null },
+      { id: 6, name: "Home & Garden", icon: "home", slug: "home", parentId: null },
+    ];
+    
+    sampleCategories.forEach(cat => {
+      this.categories.set(cat.id, cat as Category);
+    });
+
     // Sample users
     const sampleUsers = [
       { name: "Michael Johnson", phone: "+15551234567", password: "password123" },
@@ -67,11 +101,10 @@ export class MemStorage implements IStorage {
         shortDescription: "Latest iPhone with advanced camera system and A16 Bionic chip. Excellent condition, barely used.",
         fullDescription: "Latest iPhone 14 Pro Max with advanced camera system and A16 Bionic chip. This phone is in excellent condition, barely used for 3 months. Comes with original box, charger, and unused EarPods. The device has been kept in a protective case and screen protector since day one. No scratches or dents visible. Battery health is at 98%. Perfect for anyone looking for a premium smartphone experience.",
         price: "899.00",
-        category: "electronics",
+        categoryId: 1,
         location: "New York, NY",
         latitude: "40.7128",
         longitude: "-74.0060",
-        images: ["https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&h=400"],
         specifications: JSON.stringify({
           brand: "Apple",
           model: "iPhone 14 Pro Max",
@@ -86,12 +119,12 @@ export class MemStorage implements IStorage {
         shortDescription: "Comfortable L-shaped sectional sofa in excellent condition. Perfect for modern living rooms.",
         fullDescription: "Beautiful modern sectional sofa in excellent condition. This L-shaped sofa is perfect for any contemporary living room. Made with high-quality fabric and sturdy frame construction. Very comfortable seating for up to 6 people. Dimensions: 120\" x 85\" x 35\". Non-smoking, pet-free home. Must be picked up due to size.",
         price: "1200.00",
-        category: "furniture",
+        categoryId: 2,
         location: "Los Angeles, CA",
         latitude: "34.0522",
         longitude: "-118.2437",
-        images: ["https://images.unsplash.com/photo-1555041469-a586c61ea9bc?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&h=400"],
         specifications: JSON.stringify({
+          type: "Sofa",
           brand: "West Elm",
           material: "Fabric",
           color: "Gray",
@@ -105,11 +138,10 @@ export class MemStorage implements IStorage {
         shortDescription: "Well-maintained BMW with low mileage. Full service history available.",
         fullDescription: "2020 BMW 3 Series 330i in excellent condition. This vehicle has been meticulously maintained with full service history. Low mileage at only 25,000 miles. Features include leather seats, navigation system, backup camera, and premium sound system. No accidents, clean title. Perfect for someone looking for a reliable luxury sedan.",
         price: "28500.00",
-        category: "cars",
+        categoryId: 3,
         location: "Chicago, IL",
         latitude: "41.8781",
         longitude: "-87.6298",
-        images: ["https://images.unsplash.com/photo-1555215695-3004980ad54e?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&h=400"],
         specifications: JSON.stringify({
           brand: "BMW",
           model: "3 Series 330i",
@@ -130,6 +162,9 @@ export class MemStorage implements IStorage {
       };
       this.ads.set(newAd.id, newAd);
     });
+
+    // Sample images - will be added after ads are created
+    // Images are added dynamically when ads are fetched
   }
 
   async getUser(id: number): Promise<User | undefined> {
@@ -151,11 +186,66 @@ export class MemStorage implements IStorage {
     return user;
   }
 
-  async getAds(category?: string, search?: string): Promise<Ad[]> {
+  async updateUser(id: number, updates: Partial<User>): Promise<User | undefined> {
+    const user = this.users.get(id);
+    if (!user) return undefined;
+    
+    const updatedUser = { ...user, ...updates };
+    this.users.set(id, updatedUser);
+    return updatedUser;
+  }
+
+  // Category operations
+  async getCategories(): Promise<Category[]> {
+    return Array.from(this.categories.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  async getCategoryBySlug(slug: string): Promise<Category | undefined> {
+    return Array.from(this.categories.values()).find(cat => cat.slug === slug);
+  }
+
+  async getCategoryById(id: number): Promise<Category | undefined> {
+    return this.categories.get(id);
+  }
+
+  // Image operations
+  async getImagesByAdId(adId: number): Promise<Image[]> {
+    return Array.from(this.images.values())
+      .filter(img => img.adId === adId)
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  }
+
+  async addImage(imageData: InsertImage): Promise<Image> {
+    const id = this.currentImageId++;
+    const image: Image = {
+      ...imageData,
+      id,
+      order: imageData.order ?? 0,
+      isPrimary: imageData.isPrimary ?? false,
+    };
+    this.images.set(id, image);
+    return image;
+  }
+
+  async addImages(imagesData: InsertImage[]): Promise<Image[]> {
+    return Promise.all(imagesData.map(img => this.addImage(img)));
+  }
+
+  async deleteImagesByAdId(adId: number): Promise<boolean> {
+    const adImages = Array.from(this.images.entries()).filter(([_, img]) => img.adId === adId);
+    adImages.forEach(([id, _]) => this.images.delete(id));
+    return true;
+  }
+
+  // Ad operations with category and images
+  async getAds(categorySlug?: string, search?: string): Promise<AdWithRelations[]> {
     let filteredAds = Array.from(this.ads.values()).filter(ad => ad.isActive);
     
-    if (category && category !== "all") {
-      filteredAds = filteredAds.filter(ad => ad.category === category);
+    if (categorySlug && categorySlug !== "all") {
+      const category = await this.getCategoryBySlug(categorySlug);
+      if (category) {
+        filteredAds = filteredAds.filter(ad => ad.categoryId === category.id);
+      }
     }
     
     if (search) {
@@ -167,11 +257,27 @@ export class MemStorage implements IStorage {
       );
     }
     
-    return filteredAds.sort((a, b) => b.createdAt!.getTime() - a.createdAt!.getTime());
+    const adsWithDetails = await Promise.all(
+      filteredAds
+        .sort((a, b) => b.createdAt!.getTime() - a.createdAt!.getTime())
+        .map(async ad => {
+          const category = await this.getCategoryById(ad.categoryId) || { id: 0, name: "Unknown", icon: "", slug: "", parentId: null };
+          const adImages = await this.getImagesByAdId(ad.id);
+          return { ...ad, category, images: adImages };
+        })
+    );
+    
+    return adsWithDetails;
   }
 
-  async getAd(id: number): Promise<Ad | undefined> {
-    return this.ads.get(id);
+  async getAd(id: number): Promise<AdWithRelations | undefined> {
+    const ad = this.ads.get(id);
+    if (!ad) return undefined;
+    
+    const category = await this.getCategoryById(ad.categoryId) || { id: 0, name: "Unknown", icon: "", slug: "", parentId: null };
+    const adImages = await this.getImagesByAdId(ad.id);
+    
+    return { ...ad, category, images: adImages };
   }
 
   async createAd(insertAd: InsertAd): Promise<Ad> {
@@ -188,8 +294,14 @@ export class MemStorage implements IStorage {
     return ad;
   }
 
-  async getUserAds(userId: number): Promise<Ad[]> {
-    return Array.from(this.ads.values()).filter(ad => ad.userId === userId);
+  async getUserAds(userId: number): Promise<(Ad & { images: Image[] })[]> {
+    const userAds = Array.from(this.ads.values()).filter(ad => ad.userId === userId);
+    return Promise.all(
+      userAds.map(async ad => ({
+        ...ad,
+        images: await this.getImagesByAdId(ad.id)
+      }))
+    );
   }
 
   async updateAd(id: number, updateData: Partial<Ad>): Promise<Ad | undefined> {
@@ -202,6 +314,7 @@ export class MemStorage implements IStorage {
   }
 
   async deleteAd(id: number): Promise<boolean> {
+    await this.deleteImagesByAdId(id);
     return this.ads.delete(id);
   }
 
@@ -252,6 +365,7 @@ export class MemStorage implements IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  // User operations
   async getUser(id: number): Promise<User | undefined> {
     try{
       const [user] = await db.select().from(users).where(eq(users.id, id));
@@ -285,11 +399,69 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async getAds(category?: string, search?: string): Promise<Ad[]> {
+  async updateUser(id: number, updates: Partial<User>): Promise<User | undefined> {
+    try {
+      const [user] = await db
+        .update(users)
+        .set(updates)
+        .where(eq(users.id, id))
+        .returning();
+      return user || undefined;
+    } catch (error) {
+      logger.error('Database update failed', {
+        query: 'updateUser',
+        params: { id, updates },
+        error
+      });
+      throw error;
+    }
+  }
+
+  // Category operations
+  async getCategories(): Promise<Category[]> {
+    return await db.select().from(categories).orderBy(asc(categories.name));
+  }
+
+  async getCategoryBySlug(slug: string): Promise<Category | undefined> {
+    const [category] = await db.select().from(categories).where(eq(categories.slug, slug));
+    return category || undefined;
+  }
+
+  async getCategoryById(id: number): Promise<Category | undefined> {
+    const [category] = await db.select().from(categories).where(eq(categories.id, id));
+    return category || undefined;
+  }
+
+  // Image operations
+  async getImagesByAdId(adId: number): Promise<Image[]> {
+    return await db.select().from(images).where(eq(images.adId, adId)).orderBy(asc(images.order));
+  }
+
+  async addImage(imageData: InsertImage): Promise<Image> {
+    const [image] = await db.insert(images).values(imageData).returning();
+    return image;
+  }
+
+  async addImages(imagesData: InsertImage[]): Promise<Image[]> {
+    if (imagesData.length === 0) return [];
+    const inserted = await db.insert(images).values(imagesData).returning();
+    return inserted;
+  }
+
+  async deleteImagesByAdId(adId: number): Promise<boolean> {
+    await db.delete(images).where(eq(images.adId, adId));
+    return true;
+  }
+
+  // Ad operations with category and images
+  async getAds(categorySlug?: string, search?: string): Promise<AdWithRelations[]> {
     const conditions = [];
     
-    if (category && category !== "all") {
-      conditions.push(ilike(ads.category, category));
+    if (categorySlug && categorySlug !== "all") {
+      const category = await this.getCategoryBySlug(categorySlug);
+      if (category) {
+        conditions.push(eq(ads.categoryId, category.id));
+      }
     }
     
     if (search) {
@@ -302,16 +474,30 @@ export class DatabaseStorage implements IStorage {
       );
     }
     
-    if (conditions.length > 0) {
-      return await db.select().from(ads).where(and(...conditions));
-    }
-    
-    return await db.select().from(ads);
+    const adsQuery = conditions.length > 0 
+      ? await db.select().from(ads).where(and(...conditions))
+      : await db.select().from(ads);
+
+    // Get categories and images for each ad
+    const adsWithDetails = await Promise.all(
+      adsQuery.map(async ad => {
+        const category = await this.getCategoryById(ad.categoryId) || { id: 0, name: "Unknown", icon: "", slug: "", parentId: null } as Category;
+        const adImages = await this.getImagesByAdId(ad.id);
+        return { ...ad, category, images: adImages };
+      })
+    );
+
+    return adsWithDetails;
   }
 
-  async getAd(id: number): Promise<Ad | undefined> {
+  async getAd(id: number): Promise<AdWithRelations | undefined> {
     const [ad] = await db.select().from(ads).where(eq(ads.id, id));
-    return ad || undefined;
+    if (!ad) return undefined;
+    
+    const category = await this.getCategoryById(ad.categoryId) || { id: 0, name: "Unknown", icon: "", slug: "", parentId: null } as Category;
+    const adImages = await this.getImagesByAdId(ad.id);
+    
+    return { ...ad, category, images: adImages };
   }
 
   async createAd(insertAd: InsertAd): Promise<Ad> {
@@ -322,8 +508,15 @@ export class DatabaseStorage implements IStorage {
     return ad;
   }
 
-  async getUserAds(userId: number): Promise<Ad[]> {
-    return await db.select().from(ads).where(eq(ads.userId, userId));
+  async getUserAds(userId: number): Promise<(Ad & { images: Image[] })[]> {
+    const userAds = await db.select().from(ads).where(eq(ads.userId, userId));
+    
+    return Promise.all(
+      userAds.map(async ad => ({
+        ...ad,
+        images: await this.getImagesByAdId(ad.id)
+      }))
+    );
   }
 
   async updateAd(id: number, updateData: Partial<Ad>): Promise<Ad | undefined> {
@@ -336,10 +529,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteAd(id: number): Promise<boolean> {
+    await this.deleteImagesByAdId(id);
     const result = await db.delete(ads).where(eq(ads.id, id));
     return (result.count || 0) > 0;
   }
 
+  // Cart operations
   async getCartItems(userId: number): Promise<CartItem[]> {
     return await db.select().from(cartItems).where(eq(cartItems.userId, userId));
   }

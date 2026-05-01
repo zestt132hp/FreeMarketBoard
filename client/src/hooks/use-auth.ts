@@ -60,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await apiRequest("POST", "/api/login", data);
       return response.json();
     },
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       authStorage.setToken(data.token);
       setUser(data.user);
       queryClient.invalidateQueries({ queryKey: ["/api/me"] });
@@ -72,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await apiRequest("POST", "/api/register", data);
       return response.json();
     },
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       authStorage.setToken(data.token);
       setUser(data.user);
       queryClient.invalidateQueries({ queryKey: ["/api/me"] });

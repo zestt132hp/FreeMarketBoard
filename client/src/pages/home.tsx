@@ -8,17 +8,28 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { Ad } from "../../../shared/schema";
+import type { Ad, Category, AdWithRelations } from "../../../shared/schema";
 import { logger } from '@/lib/logger';
+import { getApiUrl } from "@/lib/queryClient";
 
 export default function Home() {
   const [selectedCategory, setSelectedCategory] = useState("all");
-  const [selectedAd, setSelectedAd] = useState<(Ad & { seller?: any }) | null>(null);
+  const [selectedAd, setSelectedAd] = useState<AdWithRelations | null>(null);
   const [showAdDetail, setShowAdDetail] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [priceFilter, setPriceFilter] = useState("any");
   const [locationFilter, setLocationFilter] = useState("");
   const [sortBy, setSortBy] = useState("recent");
+
+  // Fetch categories
+  const { data: categories = [] } = useQuery<Category[]>({
+    queryKey: ["/api/categories"],
+    queryFn: async () => {
+      const response = await fetch(getApiUrl("/api/categories"));
+      if (!response.ok) throw new Error("Failed to fetch categories");
+      return response.json();
+    },
+  });
 
   // Fetch ads
   const { data: ads = [], isLoading } = useQuery({
@@ -28,7 +39,7 @@ export default function Home() {
       if (selectedCategory !== "all") params.append("category", selectedCategory);
       if (searchTerm) params.append("search", searchTerm);
       
-      const response = await fetch(`/api/ads?${params}`);
+      const response = await fetch(getApiUrl(`/api/ads?${params}`));
       if (!response.ok) throw new Error("Failed to fetch ads");
       return response.json();
     },
@@ -75,7 +86,7 @@ export default function Home() {
 
   const handleAdClick = async (ad: Ad) => {
     try {
-      const response = await fetch(`/api/ads/${ad.id}`);
+      const response = await fetch(getApiUrl(`/api/ads/${ad.id}`));
       if (response.ok) {
         const adWithSeller = await response.json();
         setSelectedAd(adWithSeller);
@@ -93,7 +104,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Header searchTerm={searchTerm} onSearchChange={setSearchTerm} />
-      <CategoryNav selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory} />
+      <CategoryNav selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory} categories={categories} />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Filters */}
@@ -104,14 +115,14 @@ export default function Home() {
                 <Label className="text-sm font-medium text-gray-700">Цена:</Label>
                 <Select value={priceFilter} onValueChange={setPriceFilter}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Any Price" />
+                    <SelectValue placeholder="Любая цена" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="any">Любая Цена</SelectItem>
-                    <SelectItem value="0-100">$0 - $100</SelectItem>
-                    <SelectItem value="100-500">$100 - $500</SelectItem>
-                    <SelectItem value="500-1000">$500 - $1000</SelectItem>
-                    <SelectItem value="1000+">$1000+</SelectItem>
+                    <SelectItem value="any">Любая цена</SelectItem>
+                    <SelectItem value="0-100">0 - 100 ₽</SelectItem>
+                    <SelectItem value="100-500">100 - 500 ₽</SelectItem>
+                    <SelectItem value="500-1000">500 - 1000 ₽</SelectItem>
+                    <SelectItem value="1000+">1000+ ₽</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -158,7 +169,7 @@ export default function Home() {
         {/* Ad Listings */}
         {isLoading ? (
           <div className="flex items-center justify-center h-64">
-            <p>Loading ads...</p>
+            <p>Загрузка объявлений...</p>
           </div>
         ) : filteredAds.length === 0 ? (
           <div className="flex items-center justify-center h-64">

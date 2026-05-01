@@ -1,27 +1,37 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MapPin, Clock } from "lucide-react";
-import type { Ad } from "../../../shared/schema";
+import type { Ad, Image as AdImage } from "../../../shared/schema";
 import { formatDistanceToNow } from "date-fns";
 
 interface AdCardProps {
-  ad: Ad;
+  ad: Ad & { images?: AdImage[]; category?: string };
   onClick: (ad: Ad) => void;
 }
 
 export function AdCard({ ad, onClick }: AdCardProps) {
-  const timeAgo = ad.createdAt 
+  const timeAgo = ad.createdAt
     ? formatDistanceToNow(new Date(ad.createdAt), { addSuffix: true })
-    : "Recently";
+    : "Недавно";
+
+  // Get first image path from images array (new schema) or fallback to string (old schema)
+  const firstImagePath = ad.images && ad.images.length > 0
+    ? ((ad.images[0] as AdImage).path ?? "") || "https://via.placeholder.com/400x300"
+    : "https://via.placeholder.com/400x300";
+
+  // Get category name from category relation or fallback to string
+  const categoryName = typeof ad.category === 'object' && ad.category !== null
+    ? (ad.category as any).name
+    : ad.category;
 
   return (
-    <Card 
+    <Card
       className="cursor-pointer hover:shadow-md transition-shadow"
       onClick={() => onClick(ad)}
     >
       <div className="aspect-w-16 aspect-h-12">
         <img
-          src={ad.images[0] || "https://via.placeholder.com/400x300"}
+          src={firstImagePath}
           alt={ad.title}
           className="w-full h-48 object-cover rounded-t-lg"
         />
@@ -36,7 +46,7 @@ export function AdCard({ ad, onClick }: AdCardProps) {
             ${parseFloat(ad.price).toLocaleString()}
           </span>
           <Badge variant="secondary" className="text-xs">
-            {ad.category}
+            {categoryName || 'Категория'}
           </Badge>
         </div>
         <div className="flex items-center text-sm text-gray-500">

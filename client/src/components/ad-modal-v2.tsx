@@ -1,13 +1,15 @@
-import { useEffect, useMemo } from "react";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertAdSchema, adFormSchema, createAdFormSchema, categoriesData } from "../../../shared/schema";
-import type { Ad, Image as AdImage } from "../../../shared/schema";
+import { insertAdSchema, adFormSchema, type Ad, type Category, type Image as AdImage } from "../../../shared/schema";
 import SpecificationsForm from "./specifications-form";
+import { useQuery } from "@tanstack/react-query";
+import { ImageUploaderList, type UploadedImage } from "./image-uploader-list";
+import { useAuth } from "@/hooks/use-auth";
 import {
   Dialog,
   DialogContent,
- DialogDescription,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -31,18 +33,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, X } from "lucide-react";
+import { getApiUrl } from "@/lib/queryClient";
 
 interface AdFormData {
   title: string;
   shortDescription: string;
   fullDescription: string;
   price: string;
-  category: string;
+  categoryId: number;
   location: string;
   latitude?: string;
   longitude?: string;
-  images: string[];
   specifications: Record<string, any>;
   isActive?: boolean;
 }
@@ -55,13 +56,27 @@ interface AdModalProps {
   isLoading?: boolean;
 }
 
-export default function AdModal({
+export default function AdModalV2({
   open,
   onOpenChange,
   ad,
   onSubmit,
   isLoading = false,
 }: AdModalProps) {
+  const [selectedCategorySlug, setSelectedCategorySlug] = useState<string>("electronics");
+  const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
+  const { user } = useAuth();
+
+  // Fetch categories
+  const { data: categories = [] } = useQuery<Category[]>({
+    queryKey: ["/api/categories"],
+    enabled: open,
+    queryFn: async () => {
+      const response = await fetch(getApiUrl("/api/categories"));
+      if (!response.ok) throw new Error("Failed to fetch categories");
+      return response.json();
+    },
+  });
 
   const form = useForm<AdFormData>({
     resolver: zodResolver(adFormSchema),
@@ -70,67 +85,85 @@ export default function AdModal({
       shortDescription: "",
       fullDescription: "",
       price: "",
-      category: "electronics",
+      categoryId: 1,
       location: "",
       latitude: "",
       longitude: "",
-      images: [],
       specifications: {},
       isActive: true,
     },
   });
 
-  const { fields, append, remove } = useFieldArray({
-    control: form.control,
-    name: "images",
-  });
-
-  const category = form.watch("category");
+  const categorySlug = form.watch("categoryId");
 
   useEffect(() => {
     if (ad) {
-      // Get category slug from category relation or use the string value
-      const categorySlug = typeof (ad as any).category === 'object' && (ad as any).category !== null
-        ? ((ad as any).category as any).slug || ((ad as any).category as any).id
-        : (ad as any).categoryId?.toString() || (ad as any).category;
-      
-      // Get image paths from images array
-      const imagePaths = (ad as any).images?.map((img: any) => (img as AdImage).path || img) || [];
+      // Find category by ID to get the slug for specifications form
+      const category = categories.find((c: Category) => c.id === ad.categoryId);
+      if (category) {
+        setSelectedCategorySlug(category.slug);
+      }
       
       form.reset({
         title: ad.title,
         shortDescription: ad.shortDescription,
         fullDescription: ad.fullDescription,
         price: ad.price,
-        category: categorySlug || "electronics",
+        categoryId: ad.categoryId,
         location: ad.location,
         latitude: ad.latitude || "",
         longitude: ad.longitude || "",
-        images: imagePaths,
         specifications: typeof ad.specifications === 'string' ? JSON.parse(ad.specifications) : ad.specifications,
         isActive: ad.isActive ?? true,
       });
+      
+      // Инициализация загруженных изображений из существующего объявления
+      if (ad.images && ad.images.length > 0) {
+        const existingImages: UploadedImage[] = ad.images.map((img: AdImage, index: number) => ({
+          id: `db-${img.id}`,
+          dbId: img.id,
+          filename: img.path.split('/').pop() || '',
+          originalName: img.path.split('/').pop() || '',
+          path: getApiUrl(img.path),
+          thumbnailPath: getApiUrl(img.path.replace(/\/([^\/]+)$/, '/thumbnails/$1')),
+          order: img.order ?? index,
+          isPrimary: img.isPrimary ?? (index === 0),
+          status: 'uploaded' as const,
+          adId: ad.id,
+        }));
+        setUploadedImages(existingImages);
+      } else {
+        setUploadedImages([]);
+      }
     } else {
       form.reset({
         title: "",
         shortDescription: "",
         fullDescription: "",
         price: "",
-        category: "electronics",
+        categoryId: 1,
         location: "",
         latitude: "",
         longitude: "",
-        images: [],
         specifications: {},
         isActive: true,
       });
+      setSelectedCategorySlug("electronics");
+      setUploadedImages([]);
     }
-  }, [ad, open, form]);
+  }, [ad, open, form, categories]);
 
   const handleSubmit = async (data: AdFormData) => {
     console.log('Form data submitted:', data);
+    console.log('Uploaded images:', uploadedImages);
     
     try {
+      // Проверяем, есть ли изображения
+      if (uploadedImages.length === 0) {
+        alert('Пожалуйста, добавьте хотя бы одно изображение');
+        return;
+      }
+      
       // Convert form data to match the server schema
       const submitData: any = {
         ...data,
@@ -145,9 +178,13 @@ export default function AdModal({
       };
       
       console.log('Processed submit data:', submitData);
-      console.log('Calling onSubmit callback...');
+      console.log('Calling onSubmit callback with images...');
       
-      await onSubmit(submitData);
+      // Передаём данные с изображениями в родительский компонент
+      await onSubmit({
+        ...submitData,
+        _images: uploadedImages, // Временное поле для передачи изображений
+      });
       
       console.log('onSubmit completed successfully');
     } catch (error) {
@@ -155,12 +192,15 @@ export default function AdModal({
     }
   };
 
-  const handleAddImage = () => {
-    append("");
-  };
-
-  const handleRemoveImage = (index: number) => {
-    remove(index);
+  const handleCategoryChange = (categoryIdStr: string) => {
+    const categoryId = parseInt(categoryIdStr, 10);
+    form.setValue("categoryId", categoryId);
+    
+    // Find the category to get the slug
+    const category = categories.find((c: Category) => c.id === categoryId);
+    if (category) {
+      setSelectedCategorySlug(category.slug);
+    }
   };
 
   return (
@@ -170,7 +210,7 @@ export default function AdModal({
           <DialogTitle>{ad ? "Редактировать объявление" : "Создать объявление"}</DialogTitle>
           <DialogDescription>
             {ad
-              ? "Внесите изменения в ваше объявление"
+              ? "Внесите изменения в объявление"
               : "Заполните форму для создания нового объявления"}
           </DialogDescription>
         </DialogHeader>
@@ -193,7 +233,7 @@ export default function AdModal({
                 <FormItem>
                   <FormLabel>Название</FormLabel>
                   <FormControl>
-                    <Input placeholder="Например: iPhone 14 Pro Max" {...field} />
+                    <Input placeholder="Например, iPhone 14 Pro Max" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -206,7 +246,7 @@ export default function AdModal({
                 name="price"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Цена ($)</FormLabel>
+                    <FormLabel>Цена (₽)</FormLabel>
                     <FormControl>
                       <Input type="number" step="0.01" placeholder="999.00" {...field} />
                     </FormControl>
@@ -217,19 +257,19 @@ export default function AdModal({
 
               <FormField
                 control={form.control}
-                name="category"
+                name="categoryId"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Категория</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={handleCategoryChange} value={field.value?.toString()}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Выберите категорию" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {categoriesData.filter(c => c.id !== "all").map((category) => (
-                          <SelectItem key={category.id} value={category.id}>
+                        {categories.map((category: Category) => (
+                          <SelectItem key={category.id} value={category.id.toString()}>
                             {category.name}
                           </SelectItem>
                         ))}
@@ -287,7 +327,7 @@ export default function AdModal({
                   <FormItem>
                     <FormLabel>Город/Местоположение</FormLabel>
                     <FormControl>
-                      <Input placeholder="Например: Москва" {...field} />
+                      <Input placeholder="Например, Москва" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -302,7 +342,7 @@ export default function AdModal({
                     <FormLabel>Статус</FormLabel>
                     <Select
                       onValueChange={(value) => field.onChange(value === "true")}
-                      defaultValue={field.value ? "true" : "false"}
+                      value={field.value ? "true" : "false"}
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -326,7 +366,7 @@ export default function AdModal({
                 name="latitude"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Широта (опционально)</FormLabel>
+                    <FormLabel>Широта (необязательно)</FormLabel>
                     <FormControl>
                       <Input type="text" placeholder="55.7558" {...field} />
                     </FormControl>
@@ -340,7 +380,7 @@ export default function AdModal({
                 name="longitude"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Долгота (опционально)</FormLabel>
+                    <FormLabel>Долгота (необязательно)</FormLabel>
                     <FormControl>
                       <Input type="text" placeholder="37.6173" {...field} />
                     </FormControl>
@@ -350,49 +390,24 @@ export default function AdModal({
               />
             </div>
 
-            {/* Images Section */}
-            <div className="space-y-2">
-              <FormLabel>Изображения (URL)</FormLabel>
-              {fields.map((field, index) => (
-                <div key={field.id} className="flex gap-2">
-                  <FormField
-                    control={form.control}
-                    name={`images.${index}`}
-                    render={({ field }) => (
-                      <FormItem className="flex-1">
-                        <FormControl>
-                          <Input placeholder="https://example.com/image.jpg" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={() => handleRemoveImage(index)}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleAddImage}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Добавить изображение
-              </Button>
-            </div>
-
             {/* Specifications Section */}
             <SpecificationsForm
-              category={category}
+              category={selectedCategorySlug}
               specifications={form.watch("specifications") || {}}
+              onSpecificationsChange={(specs) => form.setValue("specifications", specs)}
             />
+
+            {/* Секция загрузки изображений */}
+            <div className="border-t pt-4">
+              <ImageUploaderList
+                images={uploadedImages}
+                onChange={setUploadedImages}
+                maxImages={10}
+                userId={user?.id}
+                adId={ad?.id}
+                disabled={isLoading}
+              />
+            </div>
 
             <DialogFooter>
               <Button
@@ -400,10 +415,10 @@ export default function AdModal({
                 variant="outline"
                 onClick={() => onOpenChange(false)}
               >
-                Отмена
+                Отменить
               </Button>
               <Button type="submit" disabled={isLoading}>
-                {isLoading ? "Сохранение..." : ad ? "Сохранить изменения" : "Создать объявление"}
+                {isLoading ? "Сохранение..." : ad ? "Сохранить изменения" : "Создать"}
               </Button>
             </DialogFooter>
           </form>

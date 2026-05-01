@@ -7,20 +7,20 @@ import {
   ShoppingCart, 
   Phone, 
   MapPin, 
-  Clock, 
+  Clock,
   ChevronLeft, 
   ChevronRight,
   Star,
   User
 } from "lucide-react";
-import type { Ad } from "../../../shared/schema";
+import type { Ad, Image as AdImage } from "../../../shared/schema";
 import { useCart } from "@/hooks/use-cart";
 import { formatDistanceToNow } from "date-fns";
 
 interface AdDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
-  ad: Ad & { seller?: any } | null;
+  ad: (Ad & { seller?: any; images?: AdImage[]; category?: { name: string } }) | null;
 }
 
 export function AdDetailModal({ isOpen, onClose, ad }: AdDetailModalProps) {
@@ -30,19 +30,22 @@ export function AdDetailModal({ isOpen, onClose, ad }: AdDetailModalProps) {
   if (!ad) return null;
 
   const specifications = JSON.parse(ad.specifications || '{}');
-  const timeAgo = ad.createdAt 
+  const timeAgo = ad.createdAt
     ? formatDistanceToNow(new Date(ad.createdAt), { addSuffix: true })
-    : "Recently";
+    : "Недавно";
+
+  // Get image paths from the images array
+  const imagePaths = ad.images?.map(img => img.path) || [];
 
   const nextImage = () => {
     setCurrentImageIndex((prev) => 
-      prev === ad.images.length - 1 ? 0 : prev + 1
+      prev === imagePaths.length - 1 ? 0 : prev + 1
     );
   };
 
   const prevImage = () => {
     setCurrentImageIndex((prev) => 
-      prev === 0 ? ad.images.length - 1 : prev - 1
+      prev === 0 ? imagePaths.length - 1 : prev - 1
     );
   };
 
@@ -69,11 +72,11 @@ export function AdDetailModal({ isOpen, onClose, ad }: AdDetailModalProps) {
             <div className="relative">
               <div className="relative h-96 bg-gray-200 rounded-lg overflow-hidden">
                 <img
-                  src={ad.images[currentImageIndex] || "https://via.placeholder.com/600x400"}
+                  src={imagePaths[currentImageIndex] || "https://via.placeholder.com/600x400"}
                   alt={ad.title}
                   className="w-full h-full object-cover"
                 />
-                {ad.images.length > 1 && (
+                {imagePaths.length > 1 && (
                   <>
                     <Button
                       variant="outline"
@@ -97,9 +100,9 @@ export function AdDetailModal({ isOpen, onClose, ad }: AdDetailModalProps) {
             </div>
 
             {/* Thumbnail Navigation */}
-            {ad.images.length > 1 && (
+            {imagePaths.length > 1 && (
               <div className="flex space-x-2 overflow-x-auto">
-                {ad.images.map((image, index) => (
+                {imagePaths.map((image, index) => (
                   <img
                     key={index}
                     src={image}
@@ -122,7 +125,7 @@ export function AdDetailModal({ isOpen, onClose, ad }: AdDetailModalProps) {
                   ${parseFloat(ad.price).toLocaleString()}
                 </span>
                 <Badge className="bg-blue-100 text-primary">
-                  {ad.category}
+                  {ad.category?.name || 'Категория'}
                 </Badge>
               </div>
 
@@ -184,7 +187,7 @@ export function AdDetailModal({ isOpen, onClose, ad }: AdDetailModalProps) {
             {/* Seller Information */}
             {ad.seller && (
               <div className="p-4 bg-gray-50 rounded-lg">
-                <h4 className="font-semibold mb-2">Seller Information</h4>
+                <h4 className="font-semibold mb-2">Информация о продавце</h4>
                 <div className="space-y-2">
                   <div className="flex items-center">
                     <User className="h-4 w-4 mr-2 text-gray-600" />
@@ -205,11 +208,11 @@ export function AdDetailModal({ isOpen, onClose, ad }: AdDetailModalProps) {
 
             {/* Map Placeholder */}
             <div>
-              <h4 className="font-semibold mb-3">Location</h4>
+              <h4 className="font-semibold mb-3">Местоположение</h4>
               <div className="h-48 bg-gray-200 rounded-lg flex items-center justify-center">
                 <div className="text-center">
                   <MapPin className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                  <p className="text-gray-500">Interactive Map</p>
+                  <p className="text-gray-500">Интерактивная карта</p>
                   <p className="text-sm text-gray-400">{ad.location}</p>
                 </div>
               </div>

@@ -1,4 +1,22 @@
-import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { QueryClient as TanStackQueryClient } from "@tanstack/react-query";
+
+// Compatibility wrapper for older code
+export const QueryClient = TanStackQueryClient;
+
+// Helper function to get the correct API URL based on environment
+export function getApiUrl(path: string): string {
+  const isDev = import.meta.env.MODE === 'development';
+  const isSeparateServer = window.location.port === '3001';
+  
+  // If we're in development and running on port 3001 (separate client),
+  // we need to use the full server URL because Vite proxy doesn't work
+  if (isDev && isSeparateServer && path.startsWith('/api')) {
+    return `http://localhost:5000${path}`;
+  }
+  
+  // For Vite dev server (port 3000), the proxy will handle /api requests
+  return path;
+}
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -12,7 +30,16 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  const res = await fetch(url, {
+  // In development, when running client and server separately,
+  // we need to use the full server URL
+  const isDev = import.meta.env.MODE === 'development';
+  const isSeparateServer = window.location.port === '3001';
+  
+  const targetUrl = isDev && isSeparateServer && url.startsWith('/api')
+    ? `http://localhost:5000${url}`
+    : url;
+
+  const res = await fetch(targetUrl, {
     method,
     headers: data ? { "Content-Type": "application/json" } : {},
     body: data ? JSON.stringify(data) : undefined,
@@ -26,10 +53,20 @@ export async function apiRequest(
 type UnauthorizedBehavior = "returnNull" | "throw";
 export const getQueryFn: <T>(options: {
   on401: UnauthorizedBehavior;
-}) => QueryFunction<T> =
+}) => any =
   ({ on401: unauthorizedBehavior }) =>
-  async ({ queryKey }) => {
-    const res = await fetch(queryKey[0] as string, {
+  async ({ queryKey }: { queryKey: any }) => {
+    let targetUrl = queryKey[0] as string;
+    
+    // Apply the same logic for query functions
+    const isDev = import.meta.env.MODE === 'development';
+    const isSeparateServer = window.location.port === '3001';
+    
+    if (isDev && isSeparateServer && targetUrl.startsWith('/api')) {
+      targetUrl = `http://localhost:5000${targetUrl}`;
+    }
+    
+    const res = await fetch(targetUrl, {
       credentials: "include",
     });
 
