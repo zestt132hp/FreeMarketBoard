@@ -25,11 +25,14 @@ interface AdDetailModalProps {
 }
 
 export function AdDetailModal({ isOpen, onClose, ad }: AdDetailModalProps) {
-  const { addToCart } = useCart();
+  const { addToCart, isOwner } = useCart();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const { data: specifications } = useAdSpecifications(ad?.id ?? null);
 
   if (!ad) return null;
+
+  // Проверяем, является ли текущий пользователь владельцем объявления
+  const isCurrentUserOwner = isOwner(ad.userId);
 
   // Use specifications from API or fallback to parsing JSON
   const specsData = specifications || (ad.specifications ? JSON.parse(ad.specifications || '{}') : {});
@@ -125,7 +128,7 @@ export function AdDetailModal({ isOpen, onClose, ad }: AdDetailModalProps) {
             <div>
               <div className="flex items-center justify-between mb-4">
                 <span className="text-3xl font-bold text-primary">
-                  ${parseFloat(ad.price).toLocaleString()}
+                  {parseFloat(ad.price).toLocaleString() + " руб."}
                 </span>
                 <Badge className="bg-blue-100 text-primary">
                   {ad.category?.name || 'Категория'}
@@ -177,13 +180,25 @@ export function AdDetailModal({ isOpen, onClose, ad }: AdDetailModalProps) {
 
             {/* Action Buttons */}
             <div className="space-y-3">
-              <Button
-                className="w-full"
-                onClick={handleAddToCart}
-              >
-                <ShoppingCart className="mr-2 h-4 w-4" />
-                Добавить в корзину
-              </Button>
+              {!isCurrentUserOwner && (
+                <Button
+                  className="w-full"
+                  onClick={handleAddToCart}
+                >
+                  <ShoppingCart className="mr-2 h-4 w-4" />
+                  Добавить в корзину
+                </Button>
+              )}
+              {isCurrentUserOwner && (
+                <Button
+                  className="w-full"
+                  disabled
+                  variant="secondary"
+                >
+                  <ShoppingCart className="mr-2 h-4 w-4" />
+                  Ваше объявление
+                </Button>
+              )}
               {ad.seller?.phone && (
                 <Button
                   variant="outline"

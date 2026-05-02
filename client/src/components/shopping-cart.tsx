@@ -64,7 +64,7 @@ export function ShoppingCartComponent({ isOpen, onClose }: ShoppingCartProps) {
                   <div className="flex-1">
                     <h4 className="font-medium">{item.ad?.title}</h4>
                     <p className="text-sm text-gray-600">
-                      ${item.ad ? parseFloat(item.ad.price).toLocaleString() : '0'}
+                      {item.ad ? parseFloat(item.ad.price).toLocaleString() : '0'} руб.
                     </p>
                   </div>
                   <Button
@@ -87,7 +87,7 @@ export function ShoppingCartComponent({ isOpen, onClose }: ShoppingCartProps) {
             <div className="flex justify-between items-center">
               <span className="text-lg font-semibold">Итого:</span>
               <span className="text-2xl font-bold text-primary">
-                ${total.toLocaleString()}
+                {total.toLocaleString() + " руб."}
               </span>
             </div>
 

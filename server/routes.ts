@@ -1031,9 +1031,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/cart", authenticateToken, async (req, res) => {
     try {
       const authReq = req as AuthenticatedRequest;
+      const { adId } = req.body;
+      const userId = authReq.user.userId;
+      
+      // Проверка: нельзя добавить своё объявление в корзину
+      const ad = await storage.getAd(adId);
+      if (!ad) {
+        return res.status(404).json({ message: "Ad not found" });
+      }
+      
+      if (ad.userId === userId) {
+        return res.status(400).json({ message: "Cannot add your own ad to cart" });
+      }
+      
       const cartData = insertCartItemSchema.parse({
-        ...req.body,
-        userId: authReq.user.userId,
+        adId,
+        userId,
       });
       
       const cartItem = await storage.addToCart(cartData);

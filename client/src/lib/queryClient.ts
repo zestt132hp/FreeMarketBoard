@@ -1,4 +1,5 @@
 import { QueryClient as TanStackQueryClient } from "@tanstack/react-query";
+import { createAuthHeaders } from "@/lib/auth";
 
 // Compatibility wrapper for older code
 export const QueryClient = TanStackQueryClient;
@@ -41,7 +42,10 @@ export async function apiRequest(
 
   const res = await fetch(targetUrl, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers: {
+      ...(data ? { "Content-Type": "application/json" } : {}),
+      ...createAuthHeaders(),
+    },
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });
@@ -68,6 +72,7 @@ export const getQueryFn: <T>(options: {
     
     const res = await fetch(targetUrl, {
       credentials: "include",
+      headers: createAuthHeaders(),
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {

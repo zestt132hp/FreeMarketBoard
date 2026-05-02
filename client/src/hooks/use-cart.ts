@@ -8,10 +8,11 @@ import { useToast } from "./use-toast";
 interface CartContextType {
   cartItems: any[];
   isLoading: boolean;
-  addToCart: (adId: number) => Promise<void>;
+  addToCart: (adId: number, adUserId?: number) => Promise<void>;
   removeFromCart: (adId: number) => Promise<void>;
   clearCart: () => Promise<void>;
   cartCount: number;
+  isOwner: (adUserId: number | undefined) => boolean;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -46,7 +47,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
   });
 
   const addToCartMutation = useMutation({
-    mutationFn: async (adId: number) => {
+    mutationFn: async ({ adId, adUserId }: { adId: number; adUserId?: number }) => {
+      // Проверка: нельзя добавить своё объявление в корзину
+      if (adUserId && isAuthenticated && adUserId === (window as any).__CURRENT_USER_ID__) {
+        throw new Error("Cannot add your own ad to cart");
+      }
       const response = await apiRequest("POST", "/api/cart", { adId });
       return response.json();
     },
@@ -57,10 +62,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
         description: "Item has been added to your cart.",
       });
     },
-    onError: () => {
+    onError: (error: any) => {
+      const message = error?.message || "Failed to add item to cart.";
       toast({
-        title: "Error",
-        description: "Failed to add item to cart.",
+        title: message.includes("own ad") ? "Cannot add own ad" : "Error",
+        description: message,
         variant: "destructive",
       });
     },
@@ -94,7 +100,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  const addToCart = async (adId: number) => {
+  const addToCart = async (adId: number, adUserId?: number) => {
     if (!isAuthenticated) {
       toast({
         title: "Please login",
@@ -103,7 +109,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
       });
       return;
     }
-    await addToCartMutation.mutateAsync(adId);
+    await addToCartMutation.mutateAsync({ adId, adUserId });
+  };
+
+  const isOwner = (adUserId: number | undefined): boolean => {
+    return isAuthenticated && adUserId === (window as any).__CURRENT_USER_ID__;
   };
 
   const removeFromCart = async (adId: number) => {
@@ -121,6 +131,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     removeFromCart,
     clearCart,
     cartCount: cartItems.length,
+    isOwner,
   };
 
   return React.createElement(CartContext.Provider, { value: contextValue }, children);

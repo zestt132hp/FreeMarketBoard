@@ -53,6 +53,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     setUser(currentUser || null);
+    // Сохраняем userId в глобальной переменной для доступа из других хуков
+    if (currentUser) {
+      (window as any).__CURRENT_USER_ID__ = currentUser.id;
+    } else {
+      delete (window as any).__CURRENT_USER_ID__;
+    }
   }, [currentUser]);
 
   const loginMutation = useMutation({
@@ -82,6 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     authStorage.removeToken();
     setUser(null);
+    delete (window as any).__CURRENT_USER_ID__;
     queryClient.clear();
   };
 
