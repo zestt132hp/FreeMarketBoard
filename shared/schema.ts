@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, decimal, foreignKey } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, decimal, foreignKey, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { createSpecsSchema } from "./category-specs";
@@ -48,6 +48,33 @@ export const cartItems = pgTable("cart_items", {
   userId: integer("user_id").notNull(),
   adId: integer("ad_id").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Specification templates - defines what specs each category has
+export const specificationTemplates = pgTable("specification_templates", {
+  id: serial("id").notNull().primaryKey(),
+  categoryId: integer("category_id").notNull().references(() => categories.id),
+  key: text("key").notNull(),
+  label: text("label").notNull(),
+  type: text("type").notNull(), // 'text' | 'number' | 'select' | 'boolean'
+  required: boolean("required").default(false),
+  placeholder: text("placeholder"),
+});
+
+// Specification options - values for select-type specs
+export const specificationOptions = pgTable("specification_options", {
+  id: serial("id").notNull().primaryKey(),
+  templateId: integer("template_id").notNull().references(() => specificationTemplates.id),
+  value: text("value").notNull(),
+  sortOrder: integer("sort_order").default(0),
+});
+
+// Ad specifications - actual values for each ad
+export const adSpecifications = pgTable("ad_specifications", {
+  id: serial("id").notNull().primaryKey(),
+  adId: integer("ad_id").notNull().references(() => ads.id),
+  templateId: integer("template_id").notNull().references(() => specificationTemplates.id),
+  value: text("value").notNull(),
 });
 
 // Insert schemas
@@ -129,12 +156,23 @@ export type InsertImage = z.infer<typeof insertImageSchema>;
 export type CartItem = typeof cartItems.$inferSelect;
 export type InsertCartItem = z.infer<typeof insertCartItemSchema>;
 export type LoginData = z.infer<typeof loginSchema>;
+export type SpecificationTemplate = typeof specificationTemplates.$inferSelect;
+export type InsertSpecificationTemplate = z.infer<typeof createInsertSchema<typeof specificationTemplates>>;
+export type SpecificationOption = typeof specificationOptions.$inferSelect;
+export type InsertSpecificationOption = z.infer<typeof createInsertSchema<typeof specificationOptions>>;
+export type AdSpecification = typeof adSpecifications.$inferSelect;
+export type InsertAdSpecification = z.infer<typeof createInsertSchema<typeof adSpecifications>>;
 
 // Extended types with relations (for API responses)
 export type AdWithRelations = Ad & {
   category?: Category;
   images?: Image[];
   seller?: User;
+  specifications?: AdSpecificationWithTemplate[];
+};
+
+export type AdSpecificationWithTemplate = AdSpecification & {
+  template?: SpecificationTemplate;
 };
 
 // Categories data (for reference - will be stored in database)

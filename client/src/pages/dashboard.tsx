@@ -322,7 +322,7 @@ export default function Dashboard() {
                         <p className="text-sm text-gray-600">{ad.location}</p>
                         <div className="flex items-center space-x-2 mt-1">
                           <span className="font-bold text-primary">
-                            ${parseFloat(ad.price).toLocaleString()}
+                            {parseFloat(ad.price).toLocaleString() + " руб."}
                           </span>
                           <Badge variant={ad.isActive ? "default" : "secondary"}>
                             {ad.isActive ? "Активно" : "Неактивно"}

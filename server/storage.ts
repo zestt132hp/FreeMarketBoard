@@ -1,4 +1,14 @@
-import { users, ads, cartItems, categories, images, type User, type InsertUser, type Ad, type InsertAd, type CartItem, type InsertCartItem, type Category, type InsertCategory, type Image, type InsertImage, type AdWithRelations } from "../shared/schema";
+import {
+  users, ads, cartItems, categories, images,
+  specificationTemplates, specificationOptions, adSpecifications,
+  type User, type InsertUser, type Ad, type InsertAd,
+  type CartItem, type InsertCartItem, type Category, type InsertCategory,
+  type Image, type InsertImage, type AdWithRelations,
+  type SpecificationTemplate, type InsertSpecificationTemplate,
+  type SpecificationOption, type InsertSpecificationOption,
+  type AdSpecification, type InsertAdSpecification,
+  type AdSpecificationWithTemplate
+} from "../shared/schema";
 import { db } from "./db";
 import { eq, ilike, and, or, asc, inArray } from "drizzle-orm";
 import { logger } from "./logger"
@@ -34,6 +44,14 @@ export interface IStorage {
   addToCart(cartItem: InsertCartItem): Promise<CartItem>;
   removeFromCart(userId: number, adId: number): Promise<boolean>;
   clearCart(userId: number): Promise<boolean>;
+  
+  // Specification operations
+  getSpecTemplates(categoryId: number): Promise<SpecificationTemplate[]>;
+  getSpecTemplatesBySlug(categorySlug: string): Promise<SpecificationTemplate[]>;
+  getSpecOptions(templateId: number): Promise<SpecificationOption[]>;
+  getAdSpecifications(adId: number): Promise<AdSpecificationWithTemplate[]>;
+  saveAdSpecifications(adId: number, specs: { templateId: number; value: string }[]): Promise<void>;
+  deleteAdSpecifications(adId: number): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
@@ -362,6 +380,32 @@ export class MemStorage implements IStorage {
     userItems.forEach(([id, _]) => this.cartItems.delete(id));
     return true;
   }
+
+  // Specification operations (stub implementations for MemStorage)
+  async getSpecTemplates(categoryId: number): Promise<SpecificationTemplate[]> {
+    // Return empty array - MemStorage doesn't support specifications
+    return [];
+  }
+
+  async getSpecTemplatesBySlug(categorySlug: string): Promise<SpecificationTemplate[]> {
+    return [];
+  }
+
+  async getSpecOptions(templateId: number): Promise<SpecificationOption[]> {
+    return [];
+  }
+
+  async getAdSpecifications(adId: number): Promise<AdSpecificationWithTemplate[]> {
+    return [];
+  }
+
+  async saveAdSpecifications(adId: number, specs: { templateId: number; value: string }[]): Promise<void> {
+    // No-op for MemStorage
+  }
+
+  async deleteAdSpecifications(adId: number): Promise<boolean> {
+    return true;
+  }
 }
 
 export class DatabaseStorage implements IStorage {
@@ -557,6 +601,81 @@ export class DatabaseStorage implements IStorage {
   async clearCart(userId: number): Promise<boolean> {
     const result = await db.delete(cartItems).where(eq(cartItems.userId, userId));
     return (result.count || 0) > 0;
+  }
+
+  // Specification operations
+  async getSpecTemplates(categoryId: number): Promise<SpecificationTemplate[]> {
+    return await db
+      .select()
+      .from(specificationTemplates)
+      .where(eq(specificationTemplates.categoryId, categoryId))
+      .orderBy(asc(specificationTemplates.id));
+  }
+
+  async getSpecTemplatesBySlug(categorySlug: string): Promise<SpecificationTemplate[]> {
+    const category = await this.getCategoryBySlug(categorySlug);
+    if (!category) return [];
+    
+    return await this.getSpecTemplates(category.id);
+  }
+
+  async getSpecOptions(templateId: number): Promise<SpecificationOption[]> {
+    return await db
+      .select()
+      .from(specificationOptions)
+      .where(eq(specificationOptions.templateId, templateId))
+      .orderBy(asc(specificationOptions.sortOrder));
+  }
+
+  async getAdSpecifications(adId: number): Promise<AdSpecificationWithTemplate[]> {
+    const specs = await db
+      .select({
+        id: adSpecifications.id,
+        adId: adSpecifications.adId,
+        templateId: adSpecifications.templateId,
+        value: adSpecifications.value,
+        template: {
+          id: specificationTemplates.id,
+          categoryId: specificationTemplates.categoryId,
+          key: specificationTemplates.key,
+          label: specificationTemplates.label,
+          type: specificationTemplates.type,
+          required: specificationTemplates.required,
+          placeholder: specificationTemplates.placeholder,
+        },
+      })
+      .from(adSpecifications)
+      .innerJoin(specificationTemplates, eq(adSpecifications.templateId, specificationTemplates.id))
+      .where(eq(adSpecifications.adId, adId));
+
+    return specs.map(spec => ({
+      id: spec.id,
+      adId: spec.adId,
+      templateId: spec.templateId,
+      value: spec.value,
+      template: spec.template,
+    }));
+  }
+
+  async saveAdSpecifications(adId: number, specs: { templateId: number; value: string }[]): Promise<void> {
+    if (specs.length === 0) return;
+
+    // Delete existing specifications for this ad
+    await db.delete(adSpecifications).where(eq(adSpecifications.adId, adId));
+
+    // Insert new specifications
+    const values = specs.map(spec => ({
+      adId,
+      templateId: spec.templateId,
+      value: spec.value,
+    }));
+
+    await db.insert(adSpecifications).values(values);
+  }
+
+  async deleteAdSpecifications(adId: number): Promise<boolean> {
+    await db.delete(adSpecifications).where(eq(adSpecifications.adId, adId));
+    return true;
   }
 }
 

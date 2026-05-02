@@ -43,7 +43,7 @@ export function AdCard({ ad, onClick }: AdCardProps) {
         </p>
         <div className="flex justify-between items-center mb-2">
           <span className="text-2xl font-bold text-primary">
-            ${parseFloat(ad.price).toLocaleString()}
+            {parseFloat(ad.price).toLocaleString() + " руб." }
           </span>
           <Badge variant="secondary" className="text-xs">
             {categoryName || 'Категория'}

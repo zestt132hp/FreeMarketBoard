@@ -65,7 +65,39 @@ export default function AdModalV2({
 }: AdModalProps) {
   const [selectedCategorySlug, setSelectedCategorySlug] = useState<string>("electronics");
   const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
+  const [existingSpecs, setExistingSpecs] = useState<Record<string, any>>({});
   const { user } = useAuth();
+
+  // Load specifications from API when editing an ad
+  const { data: specsData } = useQuery({
+    queryKey: ['ad-specs', ad?.id],
+    queryFn: async () => {
+      if (!ad?.id) return [];
+      const res = await fetch(`/api/ads/${ad.id}/specs`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!ad?.id && open,
+  });
+
+  // Convert specifications from API to key-value format and update form
+  useEffect(() => {
+    if (specsData && Array.isArray(specsData)) {
+      const specsMap: Record<string, any> = {};
+      specsData.forEach((spec: any) => {
+        if (spec.template?.key) {
+          specsMap[spec.template.key] = spec.value;
+        }
+      });
+      setExistingSpecs(specsMap);
+      // Update form value when specs are loaded
+      if (ad && form) {
+        form.setValue("specifications", specsMap);
+      }
+    } else {
+      setExistingSpecs({});
+    }
+  }, [specsData, ad]);
 
   // Fetch categories
   const { data: categories = [] } = useQuery<Category[]>({
@@ -113,7 +145,7 @@ export default function AdModalV2({
         location: ad.location,
         latitude: ad.latitude || "",
         longitude: ad.longitude || "",
-        specifications: typeof ad.specifications === 'string' ? JSON.parse(ad.specifications) : ad.specifications,
+        specifications: {},
         isActive: ad.isActive ?? true,
       });
       

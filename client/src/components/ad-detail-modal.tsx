@@ -3,18 +3,19 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { 
-  ShoppingCart, 
-  Phone, 
-  MapPin, 
+import {
+  ShoppingCart,
+  Phone,
+  MapPin,
   Clock,
-  ChevronLeft, 
+  ChevronLeft,
   ChevronRight,
   Star,
   User
 } from "lucide-react";
 import type { Ad, Image as AdImage } from "../../../shared/schema";
 import { useCart } from "@/hooks/use-cart";
+import { useAdSpecifications } from "@/hooks/use-specifications";
 import { formatDistanceToNow } from "date-fns";
 
 interface AdDetailModalProps {
@@ -26,10 +27,12 @@ interface AdDetailModalProps {
 export function AdDetailModal({ isOpen, onClose, ad }: AdDetailModalProps) {
   const { addToCart } = useCart();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const { data: specifications } = useAdSpecifications(ad?.id ?? null);
 
   if (!ad) return null;
 
-  const specifications = JSON.parse(ad.specifications || '{}');
+  // Use specifications from API or fallback to parsing JSON
+  const specsData = specifications || (ad.specifications ? JSON.parse(ad.specifications || '{}') : {});
   const timeAgo = ad.createdAt
     ? formatDistanceToNow(new Date(ad.createdAt), { addSuffix: true })
     : "Недавно";
@@ -139,16 +142,25 @@ export function AdDetailModal({ isOpen, onClose, ad }: AdDetailModalProps) {
             </div>
 
             {/* Product Specifications */}
-            {Object.keys(specifications).length > 0 && (
+            {specsData && ((Array.isArray(specsData) && specsData.length > 0) || (!Array.isArray(specsData) && Object.keys(specsData).length > 0)) && (
               <div>
                 <h3 className="text-lg font-semibold mb-3">Спецификация</h3>
                 <div className="space-y-2">
-                  {Object.entries(specifications).map(([key, value]) => (
-                    <div key={key} className="flex justify-between">
-                      <span className="text-gray-600 capitalize">{key}:</span>
-                      <span>{value as string}</span>
-                    </div>
-                  ))}
+                  {Array.isArray(specsData) ? (
+                    specsData.map((spec: any) => (
+                      <div key={spec.id || spec.templateId} className="flex justify-between">
+                        <span className="text-gray-600 capitalize">{spec.template?.label || spec.key}:</span>
+                        <span>{spec.value}</span>
+                      </div>
+                    ))
+                  ) : (
+                    Object.entries(specsData).map(([key, value]) => (
+                      <div key={key} className="flex justify-between">
+                        <span className="text-gray-600 capitalize">{key}:</span>
+                        <span>{value as string}</span>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             )}

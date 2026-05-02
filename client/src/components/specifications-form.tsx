@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { getCategorySpecs, type CategorySpec } from "../../../shared/category-specs";
 import {
   FormControl,
   FormField,
@@ -17,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { useSpecTemplates, useSpecOptions, type SpecificationTemplate } from "@/hooks/use-specifications";
 
 interface SpecificationsFormProps {
   category: string;
@@ -29,64 +29,65 @@ export default function SpecificationsForm({
   specifications = {},
   onSpecificationsChange,
 }: SpecificationsFormProps) {
-  const [specs, setSpecs] = useState<CategorySpec[]>([]);
-  const [localSpecs, setLocalSpecs] = useState<Record<string, any>>({});
+  const { data: templates, isLoading } = useSpecTemplates(category);
+  const [specValues, setSpecValues] = useState<Record<string, string>>({});
 
+  // Initialize form values when templates are loaded or specifications change
   useEffect(() => {
-    const categorySpecs = getCategorySpecs(category);
-    setSpecs(categorySpecs);
-    
-    // Initialize form values with existing specifications or empty values
-    const initialValues: Record<string, any> = {};
-    categorySpecs.forEach((spec: CategorySpec) => {
-      const currentValue = specifications[spec.key];
-      if (currentValue !== undefined) {
-        initialValues[spec.key] = currentValue;
-      } else {
-        // Set default values based on type
-        switch (spec.type) {
-          case 'text':
-            initialValues[spec.key] = '';
-            break;
-          case 'number':
-            initialValues[spec.key] = 0;
-            break;
-          case 'select':
-            initialValues[spec.key] = '';
-            break;
-          case 'boolean':
-            initialValues[spec.key] = false;
-            break;
-        }
-      }
-    });
-    setLocalSpecs(initialValues);
-  }, [category, specifications]);
+    if (templates && !isLoading) {
+      setSpecValues(prev => {
+        const newValues: Record<string, string> = { ...prev };
+        templates.forEach((template: SpecificationTemplate) => {
+          const currentValue = specifications[template.key];
+          if (currentValue !== undefined) {
+            newValues[template.key] = String(currentValue);
+          } else if (!(template.key in newValues)) {
+            // Set default values based on type only if not already set
+            switch (template.type) {
+              case 'text':
+                newValues[template.key] = '';
+                break;
+              case 'number':
+                newValues[template.key] = '0';
+                break;
+              case 'select':
+                newValues[template.key] = '';
+                break;
+              case 'boolean':
+                newValues[template.key] = 'false';
+                break;
+            }
+          }
+        });
+        return newValues;
+      });
+    }
+  }, [templates, isLoading, specifications]);
 
-  const handleSpecChange = (key: string, value: any) => {
-    const updatedSpecs = { ...localSpecs, [key]: value };
-    setLocalSpecs(updatedSpecs);
+  const handleSpecChange = (key: string, value: string) => {
+    const updatedSpecs = { ...specValues, [key]: value };
+    setSpecValues(updatedSpecs);
     if (onSpecificationsChange) {
       onSpecificationsChange(updatedSpecs);
     }
   };
 
-  const renderSpecField = (spec: CategorySpec) => {
-    const value = localSpecs[spec.key];
+  const renderSpecField = (template: SpecificationTemplate) => {
+    const value = specValues[template.key] ?? '';
     
-    switch (spec.type) {
+    switch (template.type) {
       case 'text':
         return (
           <FormItem>
             <FormLabel>
-              {spec.label}
-              {spec.required && <span className="text-red-500 ml-1">*</span>}
+              {template.label}
+              {template.required && <span className="text-red-500 ml-1">*</span>}
             </FormLabel>
             <FormControl>
               <Input
-                placeholder={spec.placeholder}
-                value={value || ''}
-                onChange={(e) => handleSpecChange(spec.key, e.target.value)}
+                placeholder={template.placeholder || ''}
+                value={value}
+                onChange={(e) => handleSpecChange(template.key, e.target.value)}
               />
             </FormControl>
             <FormMessage />
@@ -97,17 +98,17 @@ export default function SpecificationsForm({
         return (
           <FormItem>
             <FormLabel>
-              {spec.label}
-              {spec.required && <span className="text-red-500 ml-1">*</span>}
+              {template.label}
+              {template.required && <span className="text-red-500 ml-1">*</span>}
             </FormLabel>
             <FormControl>
               <Input
                 type="number"
-                placeholder={spec.placeholder}
-                value={value ?? 0}
+                placeholder={template.placeholder || ''}
+                value={value}
                 onChange={(e) => {
-                  const val = e.target.value === '' ? 0 : Number(e.target.value);
-                  handleSpecChange(spec.key, val);
+                  const val = e.target.value === '' ? '0' : e.target.value;
+                  handleSpecChange(template.key, val);
                 }}
               />
             </FormControl>
@@ -116,43 +117,21 @@ export default function SpecificationsForm({
         );
 
       case 'select':
-        return (
-          <FormItem>
-            <FormLabel>
-              {spec.label}
-              {spec.required && <span className="text-red-500 ml-1">*</span>}
-            </FormLabel>
-            <Select onValueChange={(val) => handleSpecChange(spec.key, val)} value={value || ''}>
-              <FormControl>
-                <SelectTrigger>
-                  <SelectValue placeholder={spec.placeholder || `Select ${spec.label.toLowerCase()}`} />
-                </SelectTrigger>
-              </FormControl>
-              <SelectContent>
-                {spec.options?.map((option: string) => (
-                  <SelectItem key={option} value={option}>
-                    {option}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <FormMessage />
-          </FormItem>
-        );
+        return <SelectField template={template} value={value} onChange={handleSpecChange} />;
 
       case 'boolean':
         return (
           <FormItem className="flex flex-row items-start space-x-3 space-y-0">
             <FormControl>
               <Checkbox
-                checked={value || false}
-                onCheckedChange={(checked) => handleSpecChange(spec.key, checked)}
+                checked={value === 'true'}
+                onCheckedChange={(checked) => handleSpecChange(template.key, checked ? 'true' : 'false')}
               />
             </FormControl>
             <div className="space-y-1 leading-none">
               <FormLabel>
-                {spec.label}
-                {spec.required && <span className="text-red-500 ml-1">*</span>}
+                {template.label}
+                {template.required && <span className="text-red-500 ml-1">*</span>}
               </FormLabel>
             </div>
             <FormMessage />
@@ -164,21 +143,54 @@ export default function SpecificationsForm({
     }
   };
 
-  if (specs.length === 0) {
+  // Separate component for select type to use useSpecOptions hook
+  function SelectField({ template, value, onChange }: { template: SpecificationTemplate; value: string; onChange: (key: string, value: string) => void }) {
+    const { data: options } = useSpecOptions(template.id);
+    
+    return (
+      <FormItem>
+        <FormLabel>
+          {template.label}
+          {template.required && <span className="text-red-500 ml-1">*</span>}
+        </FormLabel>
+        <Select onValueChange={(val) => onChange(template.key, val)} value={value}>
+          <FormControl>
+            <SelectTrigger>
+              <SelectValue placeholder={template.placeholder || `Выберите ${template.label.toLowerCase()}`} />
+            </SelectTrigger>
+          </FormControl>
+          <SelectContent>
+            {options?.map((option) => (
+              <SelectItem key={option.id} value={option.value}>
+                {option.value}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <FormMessage />
+      </FormItem>
+    );
+  }
+
+  if (isLoading) {
     return (
       <div className="text-sm text-muted-foreground">
-        No specifications available for the selected category
+        Загрузка характеристик...
       </div>
     );
+  }
+
+  if (!templates || templates.length === 0) {
+    return null;
   }
 
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold">Характеристики</h3>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {specs.map((spec) => (
-          <div key={spec.key} className="space-y-2">
-            {renderSpecField(spec)}
+        {templates.map((template) => (
+          <div key={template.id} className="space-y-2">
+            {renderSpecField(template)}
           </div>
         ))}
       </div>

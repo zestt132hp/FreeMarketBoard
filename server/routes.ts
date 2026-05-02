@@ -196,6 +196,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Specification routes
+  app.get("/api/specs/templates", async (req, res) => {
+    try {
+      const { categorySlug } = req.query;
+      
+      if (!categorySlug) {
+        return res.status(400).json({ message: "categorySlug query parameter is required" });
+      }
+      
+      const templates = await storage.getSpecTemplatesBySlug(categorySlug as string);
+      res.json(templates);
+    } catch (error) {
+      logger.error('Fetch spec templates error', { error });
+      res.status(500).json({ message: "Server error" });
+    }
+  });
+
+  app.get("/api/specs/options", async (req, res) => {
+    try {
+      const { templateId } = req.query;
+      
+      if (!templateId) {
+        return res.status(400).json({ message: "templateId query parameter is required" });
+      }
+      
+      const options = await storage.getSpecOptions(parseInt(templateId as string));
+      res.json(options);
+    } catch (error) {
+      logger.error('Fetch spec options error', { error });
+      res.status(500).json({ message: "Server error" });
+    }
+  });
+
+  app.get("/api/ads/:id/specs", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const specs = await storage.getAdSpecifications(id);
+      res.json(specs);
+    } catch (error) {
+      logger.error('Fetch ad specs error', { error });
+      res.status(500).json({ message: "Server error" });
+    }
+  });
+
   // Ad routes
   app.get("/api/ads", async (req, res) => {
     try {
@@ -329,7 +373,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           location: req.body.location,
           latitude: req.body.latitude || null,
           longitude: req.body.longitude || null,
-          specifications: req.body.specifications || '{}',
+          specifications: req.body.specifications ? JSON.stringify(req.body.specifications) : '{}',
           isActive: req.body.isActive === 'true' || req.body.isActive === true,
           userId: userId,
         });
@@ -340,8 +384,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
+      // Extract specifications from request body
+      let specificationsData: { templateId: number; value: string }[] = [];
+      if (req.body.specificationsData && typeof req.body.specificationsData === 'string') {
+        try {
+          specificationsData = JSON.parse(req.body.specificationsData);
+        } catch (err) {
+          logger.warn('Failed to parse specificationsData JSON', { error: err });
+        }
+      }
+      
       // Create ad first to get the ad ID
       const ad = await storage.createAd(adData);
+      
+      // Save specifications if provided
+      if (specificationsData.length > 0) {
+        await storage.saveAdSpecifications(ad.id, specificationsData);
+      }
       
       // Process uploaded files (если есть новые файлы)
       if (files && files.length > 0) {
@@ -541,7 +600,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           location: req.body.location,
           latitude: req.body.latitude || null,
           longitude: req.body.longitude || null,
-          specifications: req.body.specifications || '{}',
+          specifications: req.body.specifications ? JSON.stringify(req.body.specifications) : '{}',
           isActive: req.body.isActive === 'true' || req.body.isActive === true,
         };
         
@@ -553,12 +612,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
+      // Extract specifications from request body
+      let specificationsData: { templateId: number; value: string }[] = [];
+      if (req.body.specificationsData && typeof req.body.specificationsData === 'string') {
+        try {
+          specificationsData = JSON.parse(req.body.specificationsData);
+        } catch (err) {
+          logger.warn('Failed to parse specificationsData JSON', { error: err });
+        }
+      }
+      
       // Обновляем данные объявления
       if (Object.keys(updateData).length > 0) {
         const updatedAd = await storage.updateAd(id, updateData);
         if (!updatedAd) {
           return res.status(404).json({ message: "Failed to update ad" });
         }
+      }
+      
+      // Save specifications if provided
+      if (specificationsData.length > 0) {
+        await storage.saveAdSpecifications(id, specificationsData);
       }
       
       // Обработка изображений
