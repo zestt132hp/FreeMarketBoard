@@ -17,6 +17,7 @@ import type { Ad, Image as AdImage } from "../../../shared/schema";
 import { useCart } from "@/hooks/use-cart";
 import { useAdSpecifications } from "@/hooks/use-specifications";
 import { formatDistanceToNow } from "date-fns";
+import { LocationView } from "@/components/location-view";
 
 interface AdDetailModalProps {
   isOpen: boolean;
@@ -233,16 +234,15 @@ export function AdDetailModal({ isOpen, onClose, ad }: AdDetailModalProps) {
               </div>
             )}
 
-            {/* Map Placeholder */}
+            {/* Map with LocationView */}
             <div>
               <h4 className="font-semibold mb-3">Местоположение</h4>
-              <div className="h-48 bg-gray-200 rounded-lg flex items-center justify-center">
-                <div className="text-center">
-                  <MapPin className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                  <p className="text-gray-500">Интерактивная карта</p>
-                  <p className="text-sm text-gray-400">{ad.location}</p>
-                </div>
-              </div>
+              <LocationView
+                latitude={ad.latitude ? parseFloat(ad.latitude as unknown as string) : 55.7558}
+                longitude={ad.longitude ? parseFloat(ad.longitude as unknown as string) : 37.6173}
+                address={ad.location}
+                adId={ad.id}
+              />
             </div>
           </div>
         </div>

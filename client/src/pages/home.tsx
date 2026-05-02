@@ -5,6 +5,7 @@ import { CategoryNav } from "@/components/category-nav";
 import { AdCard } from "@/components/ad-card";
 import { AdDetailModal } from "@/components/ad-detail-modal";
 import { FiltersPanel } from "@/components/filters-panel";
+import { LocationFilterButton } from "@/components/location-filter-button";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -157,11 +158,22 @@ export default function Home() {
 
               <div>
                 <Label className="text-sm font-medium text-gray-700">Местоположение:</Label>
-                <Input
-                  placeholder="Введите город..."
-                  value={filters.locationFilter}
-                  onChange={(e) => updateFilter('locationFilter', e.target.value)}
-                />
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Введите город..."
+                    value={filters.locationFilter}
+                    onChange={(e) => updateFilter('locationFilter', e.target.value)}
+                    className="flex-1"
+                  />
+                  <LocationFilterButton
+                    onLocationFound={(address) => {
+                      updateFilter('locationFilter', address);
+                    }}
+                    onError={(error) => {
+                      logger.error('Geolocation error', error);
+                    }}
+                  />
+                </div>
               </div>
 
               <div>

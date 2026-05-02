@@ -165,8 +165,18 @@ export const insertImageSchema = createInsertSchema(images).omit({
 export const adFormSchema = insertAdSchema.extend({
   specifications: z.record(z.any()).optional(),
   price: z.string().min(1, "Price is required").regex(/^\d+(\.\d{1,2})?$/, "Price must be a number"),
-  latitude: z.string().optional(),
-  longitude: z.string().optional(),
+  latitude: z.string()
+    .optional()
+    .refine(
+      (val) => !val || (!isNaN(parseFloat(val)) && parseFloat(val) >= -90 && parseFloat(val) <= 90),
+      { message: "Широта должна быть между -90 и 90" }
+    ),
+  longitude: z.string()
+    .optional()
+    .refine(
+      (val) => !val || (!isNaN(parseFloat(val)) && parseFloat(val) >= -180 && parseFloat(val) <= 180),
+      { message: "Долгота должна быть между -180 и 180" }
+    ),
   // Allow both file objects and string paths for images
   images: z.array(z.union([z.instanceof(File), z.string()])).optional(),
 }).omit({ userId: true });
@@ -176,8 +186,18 @@ export function createAdFormSchema(category: string) {
   const baseSchema = insertAdSchema.extend({
     specifications: z.record(z.any()).optional(),
     price: z.string().min(1, "Price is required").regex(/^\d+(\.\d{1,2})?$/, "Price must be a number"),
-    latitude: z.string().optional(),
-    longitude: z.string().optional(),
+    latitude: z.string()
+      .optional()
+      .refine(
+        (val) => !val || (!isNaN(parseFloat(val)) && parseFloat(val) >= -90 && parseFloat(val) <= 90),
+        { message: "Широта должна быть между -90 и 90" }
+      ),
+    longitude: z.string()
+      .optional()
+      .refine(
+        (val) => !val || (!isNaN(parseFloat(val)) && parseFloat(val) >= -180 && parseFloat(val) <= 180),
+        { message: "Долгота должна быть между -180 и 180" }
+      ),
     // Allow both file objects and string paths for images
     images: z.array(z.union([z.instanceof(File), z.string()])).optional(),
   }).omit({ userId: true });

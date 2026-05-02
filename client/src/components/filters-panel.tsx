@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { FilterState } from '@/hooks/use-filters-local-storage';
+import { LocationFilterButtonMobile } from '@/components/location-filter-button';
 
 interface FiltersPanelProps {
   isOpen: boolean;
@@ -100,6 +101,15 @@ export function FiltersPanel({
               placeholder="Введите город..."
               value={tempFilters.locationFilter}
               onChange={(e) => handleTempChange('locationFilter', e.target.value)}
+            />
+            <LocationFilterButtonMobile
+              onLocationFound={(address) => {
+                handleTempChange('locationFilter', address);
+              }}
+              onError={(error) => {
+                console.error('Geolocation error', error);
+              }}
+              fullWidth
             />
           </div>
 

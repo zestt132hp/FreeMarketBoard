@@ -16,6 +16,21 @@ import { eq, inArray } from "drizzle-orm";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 
+// Calculate distance between two coordinates using Haversine formula (returns meters)
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371000; // Earth's radius in meters
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+    Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLon / 2) *
+    Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 // Extend Express Request interface to include user property
 interface AuthenticatedRequest extends Request {
   user: { userId: number; phone: string };
@@ -1307,6 +1322,176 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       logger.error('Set default address error', { error });
       res.status(500).json({ message: "Server error" });
+    }
+  });
+
+  // Geocoding route - reverse geocoding via Yandex Maps API
+  app.get("/api/geocode", async (req, res) => {
+    try {
+      const { latitude, longitude } = req.query;
+      
+      if (!latitude || !longitude) {
+        return res.status(400).json({ message: "latitude and longitude are required" });
+      }
+      
+      const lat = parseFloat(latitude as string);
+      const lon = parseFloat(longitude as string);
+      
+      if (isNaN(lat) || isNaN(lon)) {
+        return res.status(400).json({ message: "Invalid coordinates" });
+      }
+      
+      // Yandex Geocoder API request
+      const apiKey = process.env.YANDEX_MAPS_API_KEY;
+      if (!apiKey) {
+        logger.warn('YANDEX_MAPS_API_KEY not configured');
+        return res.status(500).json({ message: "Geocoding service not configured" });
+      }
+      
+      const yandexUrl = `https://geocode-maps.yandex.ru/1.x/?apikey=${apiKey}&geocode=${lon},${lat}&kind=house&format=json&lang=ru_RU`;
+      
+      const response = await fetch(yandexUrl);
+      
+      if (!response.ok) {
+        logger.error('Yandex Geocode API error', { status: response.status });
+        return res.status(500).json({ message: "Failed to get address from Yandex" });
+      }
+      
+      const data = await response.json();
+      
+      // Parse Yandex response
+      const feature = data.response.GeoObjectCollection.featureMember?.[0]?.GeoObject;
+      
+      if (!feature) {
+        return res.status(404).json({ message: "Address not found" });
+      }
+      
+      // Get formatted address
+      const address = feature.metaDataProperty.GeocoderMetaData.text;
+      const kind = feature.metaDataProperty.GeocoderMetaData.kind;
+      
+      logger.info('Geocoding success', { address, kind, coordinates: { lat, lon } });
+      
+      res.json({
+        address,
+        kind,
+        latitude: lat,
+        longitude: lon,
+      });
+    } catch (error) {
+      logger.error('Geocoding error', { error });
+      res.status(500).json({ message: "Geocoding failed" });
+    }
+  });
+
+  // Route building endpoint - Yandex Routing API with fallback
+  app.get("/api/route", async (req, res) => {
+    try {
+      const { fromLat, fromLng, toLat, toLng } = req.query;
+      
+      if (!fromLat || !fromLng || !toLat || !toLng) {
+        return res.status(400).json({
+          message: "fromLat, fromLng, toLat, toLng are required"
+        });
+      }
+      
+      const fromLatitude = parseFloat(fromLat as string);
+      const fromLongitude = parseFloat(fromLng as string);
+      const toLatitude = parseFloat(toLat as string);
+      const toLongitude = parseFloat(toLng as string);
+      
+      if (
+        isNaN(fromLatitude) || isNaN(fromLongitude) ||
+        isNaN(toLatitude) || isNaN(toLongitude)
+      ) {
+        return res.status(400).json({ message: "Invalid coordinates" });
+      }
+      
+      // Helper function to return fallback distance
+      const returnFallback = () => {
+        const distance = calculateDistance(
+          fromLatitude, fromLongitude,
+          toLatitude, toLongitude
+        );
+        const duration = Math.round(distance / 10); // ~10 m/s average
+        logger.info('Route using fallback calculation', {
+          distance: Math.round(distance),
+          duration: duration * 60,
+          from: { lat: fromLatitude, lng: fromLongitude },
+          to: { lat: toLatitude, lng: toLongitude }
+        });
+        return res.json({
+          distance: Math.round(distance),
+          duration: duration * 60, // seconds
+          polyline: "",
+          fallback: true,
+        });
+      };
+      
+      // Yandex Routing API (using Directions API)
+      const apiKey = process.env.YANDEX_MAPS_API_KEY;
+      if (!apiKey) {
+        logger.warn('YANDEX_MAPS_API_KEY not configured, using fallback');
+        return returnFallback();
+      }
+      
+      // Yandex Directions API v2
+      const yandexUrl = `https://router.browser.yandex.net/v2?apikey=${apiKey}&mode=auto&origin=${fromLongitude},${fromLatitude}&destination=${toLongitude},${toLatitude}`;
+      
+      let response;
+      try {
+        response = await fetch(yandexUrl);
+      } catch (fetchError: any) {
+        // Network error (DNS, connection refused, etc.) - use fallback
+        logger.warn('Yandex Routing API network error, using fallback', {
+          error: fetchError.message || fetchError
+        });
+        return returnFallback();
+      }
+      
+      if (!response.ok) {
+        logger.warn('Yandex Routing API error, using fallback', { status: response.status });
+        return returnFallback();
+      }
+      
+      const data = await response.json();
+      
+      // Parse Yandex Directions response
+      const route = data.routes?.[0];
+      if (!route) {
+        logger.warn('No route found in Yandex response, using fallback');
+        return returnFallback();
+      }
+      
+      const distance = route.distance?.value || 0;
+      const duration = route.duration?.value || 0;
+      
+      logger.info('Route built successfully via Yandex API', {
+        distance,
+        duration,
+        from: { lat: fromLatitude, lng: fromLongitude },
+        to: { lat: toLatitude, lng: toLongitude }
+      });
+      
+      res.json({
+        distance: Math.round(distance),
+        duration: Math.round(duration),
+        polyline: route.polyline,
+      });
+    } catch (error) {
+      logger.error('Route building error', { error });
+      // Even on unexpected errors, return fallback instead of 500
+      const { fromLat, fromLng, toLat, toLng } = req.query;
+      if (fromLat && fromLng && toLat && toLng) {
+        const fromLatitude = parseFloat(fromLat as string);
+        const fromLongitude = parseFloat(fromLng as string);
+        const toLatitude = parseFloat(toLat as string);
+        const toLongitude = parseFloat(toLng as string);
+        if (!isNaN(fromLatitude) && !isNaN(fromLongitude) && !isNaN(toLatitude) && !isNaN(toLongitude)) {
+          return returnFallback();
+        }
+      }
+      res.status(500).json({ message: "Failed to build route" });
     }
   });
 

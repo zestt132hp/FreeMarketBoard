@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertAdSchema, adFormSchema, type Ad, type Category, type Image as AdImage } from "../../../shared/schema";
 import SpecificationsForm from "./specifications-form";
+import { LocationMapSelector } from "./location-map-selector";
 import { useQuery } from "@tanstack/react-query";
 import { ImageUploaderList, type UploadedImage } from "./image-uploader-list";
 import { useAuth } from "@/hooks/use-auth";
@@ -392,36 +393,6 @@ export default function AdModalV2({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="latitude"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Широта (необязательно)</FormLabel>
-                    <FormControl>
-                      <Input type="text" placeholder="55.7558" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="longitude"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Долгота (необязательно)</FormLabel>
-                    <FormControl>
-                      <Input type="text" placeholder="37.6173" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
             {/* Specifications Section */}
             <SpecificationsForm
               category={selectedCategorySlug}
@@ -438,6 +409,23 @@ export default function AdModalV2({
                 userId={user?.id}
                 adId={ad?.id}
                 disabled={isLoading}
+              />
+            </div>
+
+            {/* Местоположение */}
+            <div className="border-t pt-4">
+              <h3 className="text-lg font-semibold mb-4">Местоположение</h3>
+              <LocationMapSelector
+                onLocationChange={(data) => {
+                  form.setValue('latitude', data.latitude.toString());
+                  form.setValue('longitude', data.longitude.toString());
+                  if (data.address) {
+                    form.setValue('location', data.address);
+                  }
+                }}
+                initialLatitude={form.getValues('latitude') ? parseFloat(form.getValues('latitude')) : undefined}
+                initialLongitude={form.getValues('longitude') ? parseFloat(form.getValues('longitude')) : undefined}
+                initialAddress={form.getValues('location')}
               />
             </div>
 
