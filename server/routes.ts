@@ -4,7 +4,7 @@ import path from "path";
 import fs from "fs/promises";
 import { storage } from "./storage";
 import { db } from "./db";
-import { loginSchema, insertUserSchema, insertAdSchema, insertCartItemSchema, insertImageSchema, type AdWithRelations, images } from "../shared/schema";
+import { loginSchema, insertUserSchema, insertAdSchema, insertCartItemSchema, insertImageSchema, type AdWithRelations, images, checkoutDtoSchema, insertAddressSchema } from "../shared/schema";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { v4 as uuidv4 } from "uuid";
@@ -1078,6 +1078,234 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.clearCart(authReq.user.userId);
       res.json({ message: "Cart cleared" });
     } catch (error) {
+      res.status(500).json({ message: "Server error" });
+    }
+  });
+
+  // Order routes
+  app.post("/api/orders", authenticateToken, async (req, res) => {
+    try {
+      const authReq = req as AuthenticatedRequest;
+      const userId = authReq.user.userId;
+      
+      // Validate checkout DTO
+      const checkoutData = checkoutDtoSchema.parse(req.body);
+      
+      // Calculate total amount
+      const totalAmount = checkoutData.items.reduce((sum, item) => {
+        return sum + parseFloat(item.price) * item.quantity;
+      }, 0);
+      
+      // Create order
+      const orderData = {
+        userId,
+        status: 'pending',
+        totalAmount: totalAmount.toFixed(2),
+        paymentMethod: checkoutData.paymentMethod,
+        deliveryMethod: 'courier',
+        recipientName: checkoutData.recipientName,
+        recipientPhone: checkoutData.recipientPhone,
+        recipientEmail: checkoutData.recipientEmail,
+        deliveryRegion: checkoutData.deliveryRegion,
+        deliveryCity: checkoutData.deliveryCity,
+        deliveryDistrict: checkoutData.deliveryDistrict,
+        deliveryStreet: checkoutData.deliveryStreet,
+        deliveryBuilding: checkoutData.deliveryBuilding,
+        deliveryApartment: checkoutData.deliveryApartment,
+      };
+      
+      // Create order items
+      const orderItemsData = checkoutData.items.map(item => ({
+        adId: item.adId,
+        title: item.title,
+        price: item.price,
+        quantity: item.quantity,
+        imagePath: item.imagePath,
+      }));
+      
+      // Generate mock QR code for payment (stub)
+      const mockQrCode = `data:image/png;base64,${Buffer.from(`MOCK_QR_${Date.now()}_${userId}`).toString('base64')}`;
+      
+      // Create order with items
+      const order = await storage.createOrder({ ...orderData, qrCode: mockQrCode }, orderItemsData);
+      
+      // Save address if requested
+      if (checkoutData.saveAddress) {
+        await storage.createAddress({
+          userId,
+          recipientName: checkoutData.recipientName,
+          recipientPhone: checkoutData.recipientPhone,
+          recipientEmail: checkoutData.recipientEmail,
+          region: checkoutData.deliveryRegion,
+          city: checkoutData.deliveryCity,
+          district: checkoutData.deliveryDistrict,
+          street: checkoutData.deliveryStreet,
+          building: checkoutData.deliveryBuilding,
+          apartment: checkoutData.deliveryApartment,
+          isDefault: false,
+        });
+      }
+      
+      // Clear cart after successful order
+      await storage.clearCart(userId);
+      
+      logger.info('Order created', { orderId: order.id, userId, totalAmount });
+      res.status(201).json(order);
+    } catch (error: any) {
+      logger.error('Order creation error', { error });
+      if (error?.name === 'ZodError') {
+        return res.status(400).json({ message: "Invalid checkout data", errors: error.errors });
+      }
+      res.status(400).json({ message: "Failed to create order" });
+    }
+  });
+
+  app.get("/api/orders", authenticateToken, async (req, res) => {
+    try {
+      const authReq = req as AuthenticatedRequest;
+      const orders = await storage.getOrders(authReq.user.userId);
+      res.json(orders);
+    } catch (error) {
+      logger.error('Fetch orders error', { error });
+      res.status(500).json({ message: "Server error" });
+    }
+  });
+
+  app.get("/api/orders/:id", authenticateToken, async (req, res) => {
+    try {
+      const authReq = req as AuthenticatedRequest;
+      const orderId = parseInt(req.params.id);
+      const order = await storage.getOrder(orderId);
+      
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+      
+      // Check ownership
+      if (order.userId !== authReq.user.userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      res.json(order);
+    } catch (error) {
+      logger.error('Fetch order error', { error });
+      res.status(500).json({ message: "Server error" });
+    }
+  });
+
+  // Address routes
+  app.get("/api/addresses", authenticateToken, async (req, res) => {
+    try {
+      const authReq = req as AuthenticatedRequest;
+      const addresses = await storage.getAddresses(authReq.user.userId);
+      res.json(addresses);
+    } catch (error) {
+      logger.error('Fetch addresses error', { error });
+      res.status(500).json({ message: "Server error" });
+    }
+  });
+
+  app.post("/api/addresses", authenticateToken, async (req, res) => {
+    try {
+      const authReq = req as AuthenticatedRequest;
+      const userId = authReq.user.userId;
+      const addressData = insertAddressSchema.parse({ ...req.body, userId });
+      
+      // If this is set as default, unset other defaults
+      if (addressData.isDefault) {
+        await storage.setDefaultAddress(userId, -1); // -1 will be ignored, just resets others
+      }
+      
+      const address = await storage.createAddress(addressData);
+      logger.info('Address created', { addressId: address.id, userId });
+      res.status(201).json(address);
+    } catch (error: any) {
+      logger.error('Address creation error', { error });
+      if (error?.name === 'ZodError') {
+        return res.status(400).json({ message: "Invalid address data", errors: error.errors });
+      }
+      res.status(400).json({ message: "Failed to create address" });
+    }
+  });
+
+  app.put("/api/addresses/:id", authenticateToken, async (req, res) => {
+    try {
+      const authReq = req as AuthenticatedRequest;
+      const addressId = parseInt(req.params.id);
+      
+      // Get existing address to verify ownership
+      const existingAddresses = await storage.getAddresses(authReq.user.userId);
+      const address = existingAddresses.find(a => a.id === addressId);
+      
+      if (!address) {
+        return res.status(404).json({ message: "Address not found" });
+      }
+      
+      const updates = insertAddressSchema.partial().parse(req.body);
+      const updatedAddress = await storage.updateAddress(addressId, updates);
+      
+      logger.info('Address updated', { addressId, userId: authReq.user.userId });
+      res.json(updatedAddress);
+    } catch (error: any) {
+      logger.error('Address update error', { error });
+      if (error?.name === 'ZodError') {
+        return res.status(400).json({ message: "Invalid address data", errors: error.errors });
+      }
+      res.status(400).json({ message: "Failed to update address" });
+    }
+  });
+
+  app.delete("/api/addresses/:id", authenticateToken, async (req, res) => {
+    try {
+      const authReq = req as AuthenticatedRequest;
+      const addressId = parseInt(req.params.id);
+      
+      // Get existing address to verify ownership
+      const existingAddresses = await storage.getAddresses(authReq.user.userId);
+      const address = existingAddresses.find(a => a.id === addressId);
+      
+      if (!address) {
+        return res.status(404).json({ message: "Address not found" });
+      }
+      
+      const success = await storage.deleteAddress(addressId);
+      
+      if (!success) {
+        return res.status(404).json({ message: "Failed to delete address" });
+      }
+      
+      logger.info('Address deleted', { addressId, userId: authReq.user.userId });
+      res.json({ message: "Address deleted successfully" });
+    } catch (error) {
+      logger.error('Address delete error', { error });
+      res.status(500).json({ message: "Server error" });
+    }
+  });
+
+  app.put("/api/addresses/:id/default", authenticateToken, async (req, res) => {
+    try {
+      const authReq = req as AuthenticatedRequest;
+      const addressId = parseInt(req.params.id);
+      const userId = authReq.user.userId;
+      
+      // Verify ownership
+      const existingAddresses = await storage.getAddresses(userId);
+      const address = existingAddresses.find(a => a.id === addressId);
+      
+      if (!address) {
+        return res.status(404).json({ message: "Address not found" });
+      }
+      
+      const success = await storage.setDefaultAddress(userId, addressId);
+      
+      if (!success) {
+        return res.status(400).json({ message: "Failed to set default address" });
+      }
+      
+      logger.info('Default address set', { addressId, userId });
+      res.json({ message: "Default address updated" });
+    } catch (error) {
+      logger.error('Set default address error', { error });
       res.status(500).json({ message: "Server error" });
     }
   });

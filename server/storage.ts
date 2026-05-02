@@ -1,13 +1,17 @@
 import {
   users, ads, cartItems, categories, images,
   specificationTemplates, specificationOptions, adSpecifications,
+  orders, orderItems, addresses,
   type User, type InsertUser, type Ad, type InsertAd,
   type CartItem, type InsertCartItem, type Category, type InsertCategory,
   type Image, type InsertImage, type AdWithRelations,
   type SpecificationTemplate, type InsertSpecificationTemplate,
   type SpecificationOption, type InsertSpecificationOption,
   type AdSpecification, type InsertAdSpecification,
-  type AdSpecificationWithTemplate
+  type AdSpecificationWithTemplate,
+  type Order, type InsertOrder,
+  type OrderItem, type InsertOrderItem,
+  type Address, type InsertAddress
 } from "../shared/schema";
 import { db } from "./db";
 import { eq, ilike, and, or, asc, inArray } from "drizzle-orm";
@@ -52,6 +56,20 @@ export interface IStorage {
   getAdSpecifications(adId: number): Promise<AdSpecificationWithTemplate[]>;
   saveAdSpecifications(adId: number, specs: { templateId: number; value: string }[]): Promise<void>;
   deleteAdSpecifications(adId: number): Promise<boolean>;
+  
+  // Order operations
+  createOrder(order: InsertOrder, items: InsertOrderItem[]): Promise<Order & { items: OrderItem[] }>;
+  getOrders(userId: number): Promise<(Order & { items: OrderItem[] })[]>;
+  getOrder(id: number): Promise<(Order & { items: OrderItem[] }) | undefined>;
+  updateOrderStatus(id: number, status: string): Promise<Order | undefined>;
+  
+  // Address operations
+  getAddresses(userId: number): Promise<Address[]>;
+  createAddress(address: InsertAddress): Promise<Address>;
+  updateAddress(id: number, updates: Partial<Address>): Promise<Address | undefined>;
+  deleteAddress(id: number): Promise<boolean>;
+  setDefaultAddress(userId: number, addressId: number): Promise<boolean>;
+  getDefaultAddress(userId: number): Promise<Address | undefined>;
 }
 
 export class MemStorage implements IStorage {
@@ -406,6 +424,48 @@ export class MemStorage implements IStorage {
   async deleteAdSpecifications(adId: number): Promise<boolean> {
     return true;
   }
+  
+  // Order operations (stub for MemStorage)
+  async createOrder(order: InsertOrder, items: InsertOrderItem[]): Promise<Order & { items: OrderItem[] }> {
+    throw new Error("Not implemented in MemStorage");
+  }
+  
+  async getOrders(userId: number): Promise<(Order & { items: OrderItem[] })[]> {
+    return [];
+  }
+  
+  async getOrder(id: number): Promise<(Order & { items: OrderItem[] }) | undefined> {
+    return undefined;
+  }
+  
+  async updateOrderStatus(id: number, status: string): Promise<Order | undefined> {
+    return undefined;
+  }
+  
+  // Address operations (stub for MemStorage)
+  async getAddresses(userId: number): Promise<Address[]> {
+    return [];
+  }
+  
+  async createAddress(address: InsertAddress): Promise<Address> {
+    throw new Error("Not implemented in MemStorage");
+  }
+  
+  async updateAddress(id: number, updates: Partial<Address>): Promise<Address | undefined> {
+    return undefined;
+  }
+  
+  async deleteAddress(id: number): Promise<boolean> {
+    return false;
+  }
+  
+  async setDefaultAddress(userId: number, addressId: number): Promise<boolean> {
+    return false;
+  }
+  
+  async getDefaultAddress(userId: number): Promise<Address | undefined> {
+    return undefined;
+  }
 }
 
 export class DatabaseStorage implements IStorage {
@@ -676,6 +736,86 @@ export class DatabaseStorage implements IStorage {
   async deleteAdSpecifications(adId: number): Promise<boolean> {
     await db.delete(adSpecifications).where(eq(adSpecifications.adId, adId));
     return true;
+  }
+  
+  // Order operations
+  async createOrder(orderData: InsertOrder, itemsData: InsertOrderItem[]): Promise<Order & { items: OrderItem[] }> {
+    // Create order
+    const [order] = await db.insert(orders).values(orderData).returning();
+    
+    // Create order items
+    const items = await Promise.all(
+      itemsData.map(item =>
+        db.insert(orderItems).values({ ...item, orderId: order.id }).returning()
+          .then(res => res[0])
+      )
+    );
+    
+    return { ...order, items };
+  }
+  
+  async getOrders(userId: number): Promise<(Order & { items: OrderItem[] })[]> {
+    const userOrders = await db.select().from(orders).where(eq(orders.userId, userId)).orderBy(orders.createdAt);
+    
+    return Promise.all(
+      userOrders.map(async order => {
+        const items = await db.select().from(orderItems).where(eq(orderItems.orderId, order.id));
+        return { ...order, items };
+      })
+    );
+  }
+  
+  async getOrder(id: number): Promise<(Order & { items: OrderItem[] }) | undefined> {
+    const [order] = await db.select().from(orders).where(eq(orders.id, id));
+    if (!order) return undefined;
+    
+    const items = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
+    return { ...order, items };
+  }
+  
+  async updateOrderStatus(id: number, status: string): Promise<Order | undefined> {
+    const [order] = await db.update(orders).set({ status }).where(eq(orders.id, id)).returning();
+    return order;
+  }
+  
+  // Address operations
+  async getAddresses(userId: number): Promise<Address[]> {
+    return await db.select().from(addresses).where(eq(addresses.userId, userId)).orderBy(addresses.isDefault, addresses.createdAt);
+  }
+  
+  async createAddress(addressData: InsertAddress): Promise<Address> {
+    const [address] = await db.insert(addresses).values(addressData).returning();
+    return address;
+  }
+  
+  async updateAddress(id: number, updates: Partial<Address>): Promise<Address | undefined> {
+    const [address] = await db.update(addresses).set(updates).where(eq(addresses.id, id)).returning();
+    return address;
+  }
+  
+  async deleteAddress(id: number): Promise<boolean> {
+    const result = await db.delete(addresses).where(eq(addresses.id, id));
+    return (result.count || 0) > 0;
+  }
+  
+  async setDefaultAddress(userId: number, addressId: number): Promise<boolean> {
+    // First, unset all default addresses for this user
+    await db.update(addresses).set({ isDefault: false }).where(eq(addresses.userId, userId));
+    
+    // Then set the specified address as default
+    const [address] = await db.update(addresses)
+      .set({ isDefault: true })
+      .where(eq(addresses.id, addressId))
+      .returning();
+    
+    return !!address;
+  }
+  
+  async getDefaultAddress(userId: number): Promise<Address | undefined> {
+    const [address] = await db.select().from(addresses)
+      .where(eq(addresses.userId, userId))
+      .where(eq(addresses.isDefault, true));
+    return address;
   }
 }
 

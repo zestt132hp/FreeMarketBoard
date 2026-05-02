@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, decimal, foreignKey, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, decimal, foreignKey, jsonb, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { createSpecsSchema } from "./category-specs";
@@ -49,6 +49,66 @@ export const cartItems = pgTable("cart_items", {
   adId: integer("ad_id").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// Addresses table - stored delivery addresses for users
+export const addresses = pgTable("addresses", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  recipientName: text("recipient_name").notNull(),
+  recipientPhone: text("recipient_phone").notNull(),
+  recipientEmail: text("recipient_email").notNull(),
+  region: text("region").notNull(),
+  city: text("city").notNull(),
+  district: text("district"),
+  street: text("street").notNull(),
+  building: text("building").notNull(),
+  apartment: text("apartment"),
+  isDefault: boolean("is_default").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  userIdIdx: index("addresses_user_id_idx").on(table.userId),
+  isDefaultIdx: index("addresses_is_default_idx").on(table.userId, table.isDefault),
+}));
+
+// Orders table
+export const orders = pgTable("orders", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  status: text("status").notNull().default('pending'), // pending, paid, shipped, delivered, cancelled
+  totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).notNull(),
+  paymentMethod: text("payment_method").notNull(), // sbp, card, installments
+  deliveryMethod: text("delivery_method").notNull().default('courier'),
+  recipientName: text("recipient_name").notNull(),
+  recipientPhone: text("recipient_phone").notNull(),
+  recipientEmail: text("recipient_email").notNull(),
+  deliveryRegion: text("delivery_region").notNull(),
+  deliveryCity: text("delivery_city").notNull(),
+  deliveryDistrict: text("delivery_district"),
+  deliveryStreet: text("delivery_street").notNull(),
+  deliveryBuilding: text("delivery_building").notNull(),
+  deliveryApartment: text("delivery_apartment"),
+  addressId: integer("address_id"), // reference to saved address
+  qrCode: text("qr_code"), // QR code for payment
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  userIdIdx: index("orders_user_id_idx").on(table.userId),
+  statusIdx: index("orders_status_idx").on(table.status),
+  createdAtIdx: index("orders_created_at_idx").on(table.createdAt),
+}));
+
+// Order items table
+export const orderItems = pgTable("order_items", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").notNull().references(() => orders.id),
+  adId: integer("ad_id").notNull(),
+  title: text("title").notNull(),
+  price: decimal("price", { precision: 10, scale: 2 }).notNull(),
+  quantity: integer("quantity").notNull().default(1),
+  imagePath: text("image_path"),
+}, (table) => ({
+  orderIdIdx: index("order_items_order_id_idx").on(table.orderId),
+  adIdIdx: index("order_items_ad_id_idx").on(table.adId),
+}));
 
 // Specification templates - defines what specs each category has
 export const specificationTemplates = pgTable("specification_templates", {
@@ -135,6 +195,44 @@ export const insertCartItemSchema = createInsertSchema(cartItems).omit({
   createdAt: true,
 });
 
+export const insertAddressSchema = createInsertSchema(addresses).omit({
+  id: true,
+  createdAt: true,
+  isDefault: true,
+});
+
+export const insertOrderSchema = createInsertSchema(orders).omit({
+  id: true,
+  createdAt: true,
+  qrCode: true,
+});
+
+export const insertOrderItemSchema = createInsertSchema(orderItems).omit({
+  id: true,
+});
+
+// Checkout DTO schema
+export const checkoutDtoSchema = z.object({
+  paymentMethod: z.enum(['sbp', 'card', 'installments']),
+  recipientName: z.string().min(1, "ФИО обязательно"),
+  recipientPhone: z.string().min(8, "Номер телефона обязателен"),
+  recipientEmail: z.string().email("Некорректный email"),
+  deliveryRegion: z.string().min(1, "Регион обязателен"),
+  deliveryCity: z.string().min(1, "Город обязателен"),
+  deliveryDistrict: z.string().optional(),
+  deliveryStreet: z.string().min(1, "Улица обязательна"),
+  deliveryBuilding: z.string().min(1, "Дом обязателен"),
+  deliveryApartment: z.string().optional(),
+  saveAddress: z.boolean().default(false),
+  items: z.array(z.object({
+    adId: z.number(),
+    title: z.string(),
+    price: z.string(),
+    quantity: z.number().default(1),
+    imagePath: z.string().optional(),
+  })),
+});
+
 // Login schema
 export const loginSchema = z.object({
   phone: z.string()
@@ -156,6 +254,13 @@ export type InsertImage = z.infer<typeof insertImageSchema>;
 export type CartItem = typeof cartItems.$inferSelect;
 export type InsertCartItem = z.infer<typeof insertCartItemSchema>;
 export type LoginData = z.infer<typeof loginSchema>;
+export type Address = typeof addresses.$inferSelect;
+export type InsertAddress = z.infer<typeof insertAddressSchema>;
+export type Order = typeof orders.$inferSelect;
+export type InsertOrder = z.infer<typeof insertOrderSchema>;
+export type OrderItem = typeof orderItems.$inferSelect;
+export type InsertOrderItem = z.infer<typeof insertOrderItemSchema>;
+export type CheckoutDto = z.infer<typeof checkoutDtoSchema>;
 export type SpecificationTemplate = typeof specificationTemplates.$inferSelect;
 export type InsertSpecificationTemplate = z.infer<typeof createInsertSchema<typeof specificationTemplates>>;
 export type SpecificationOption = typeof specificationOptions.$inferSelect;

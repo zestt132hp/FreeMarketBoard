@@ -4,6 +4,8 @@ import { Separator } from "@/components/ui/separator";
 import { Trash2 } from "lucide-react";
 import { useCart } from "@/hooks/use-cart";
 import type { Image as AdImage } from "../../../shared/schema";
+import { AdCheckout } from "./ad-checkout";
+import { useState } from "react";
 
 interface ShoppingCartProps {
   isOpen: boolean;
@@ -12,6 +14,7 @@ interface ShoppingCartProps {
 
 export function ShoppingCartComponent({ isOpen, onClose }: ShoppingCartProps) {
   const { cartItems, removeFromCart, clearCart, isLoading } = useCart();
+  const [showCheckout, setShowCheckout] = useState(false);
 
   const total = cartItems.reduce((sum, item) => {
     return sum + (item.ad ? parseFloat(item.ad.price) : 0);
@@ -26,8 +29,12 @@ export function ShoppingCartComponent({ isOpen, onClose }: ShoppingCartProps) {
   };
 
   const handleCheckout = () => {
-    // TODO: Implement checkout functionality
-    alert("Checkout functionality would be implemented here!");
+    setShowCheckout(true);
+  };
+
+  const handleCheckoutSuccess = () => {
+    setShowCheckout(false);
+    onClose();
   };
 
   return (
@@ -106,6 +113,14 @@ export function ShoppingCartComponent({ isOpen, onClose }: ShoppingCartProps) {
                 Очистить корзину
               </Button>
             </div>
+
+            {/* Checkout Modal */}
+            <AdCheckout
+              open={showCheckout}
+              onOpenChange={setShowCheckout}
+              cartItems={cartItems}
+              onSuccess={handleCheckoutSuccess}
+            />
           </div>
         )}
       </SheetContent>

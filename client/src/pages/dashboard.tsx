@@ -7,11 +7,13 @@ import { Header } from "@/components/header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, Eye } from "lucide-react";
+import { Plus, Edit, Trash2, Eye, Package } from "lucide-react";
 import { useLocation } from "wouter";
 import type { Ad, Image as AdImage, AdWithRelations } from "../../../shared/schema";
 import AdModalV2 from "@/components/ad-modal-v2";
 import { useToast } from "@/hooks/use-toast";
+import { MyOrdersSection } from "@/components/my-orders-section";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export default function Dashboard() {
   const { user, isAuthenticated } = useAuth();
@@ -19,6 +21,7 @@ export default function Dashboard() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedAd, setSelectedAd] = useState<Ad | null>(null);
+  const [isOrdersModalOpen, setIsOrdersModalOpen] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -237,15 +240,24 @@ export default function Dashboard() {
       <Header searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Панель управления</h1>
             <p className="text-gray-600">Добро пожаловать, {user?.name}!</p>
           </div>
-          <Button onClick={handleCreateAd}>
-            <Plus className="mr-2 h-4 w-4" />
-            Создать объявление
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <Button
+              onClick={() => setIsOrdersModalOpen(true)}
+              className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto"
+            >
+              <Package className="mr-2 h-4 w-4" />
+              Мои заказы
+            </Button>
+            <Button onClick={handleCreateAd} className="w-full sm:w-auto">
+              <Plus className="mr-2 h-4 w-4" />
+              Создать объявление
+            </Button>
+          </div>
         </div>
 
         {/* Stats Cards */}
@@ -372,6 +384,16 @@ export default function Dashboard() {
         onSubmit={handleSubmitAd}
         isLoading={createAdMutation.isPending || updateAdMutation.isPending}
       />
+
+      {/* Orders Modal */}
+      <Dialog open={isOrdersModalOpen} onOpenChange={setIsOrdersModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Мои заказы</DialogTitle>
+          </DialogHeader>
+          <MyOrdersSection />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
