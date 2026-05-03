@@ -1,0 +1,25 @@
+# Этап сборки клиента
+FROM node:20-bullseye AS client-builder
+
+WORKDIR /app
+COPY package*.json ./
+COPY client/ ./client/
+COPY shared/ ./shared/
+COPY vite.config.ts ./
+RUN npm install --no-optional
+
+# Сборка клиента
+RUN npm run build
+
+# Финальный образ для клиента
+FROM node:20-bullseye
+WORKDIR /app
+
+# Устанавливаем serve для статического хостинга
+RUN npm install -g serve
+
+# Копируем собранные файлы клиента
+COPY --from=client-builder /app/dist ./dist
+
+EXPOSE 3001
+CMD ["serve", "-s", "dist", "-l", "3001"]

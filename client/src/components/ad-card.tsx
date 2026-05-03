@@ -1,27 +1,57 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Clock } from "lucide-react";
-import type { Ad } from "../../../shared/schema";
+import { Button } from "@/components/ui/button";
+import { MapPin, Clock, ShoppingCart, CheckCircle } from "lucide-react";
+import type { Ad, Image as AdImage } from "../../../shared/schema";
 import { formatDistanceToNow } from "date-fns";
+import { useCart } from "@/hooks/use-cart";
 
 interface AdCardProps {
-  ad: Ad;
+  ad: Ad & { images?: AdImage[]; category?: string; userId?: number };
   onClick: (ad: Ad) => void;
 }
 
 export function AdCard({ ad, onClick }: AdCardProps) {
-  const timeAgo = ad.createdAt 
+  const { addToCart, isOwner, isInCart, openCart } = useCart();
+  
+  const timeAgo = ad.createdAt
     ? formatDistanceToNow(new Date(ad.createdAt), { addSuffix: true })
-    : "Recently";
+    : "Недавно";
+
+  // Get first image path from images array (new schema) or fallback to string (old schema)
+  const firstImagePath = ad.images && ad.images.length > 0
+    ? ((ad.images[0] as AdImage).path ?? "") || "https://via.placeholder.com/400x300"
+    : "https://via.placeholder.com/400x300";
+
+  // Get category name from category relation or fallback to string
+  const categoryName = typeof ad.category === 'object' && ad.category !== null
+    ? (ad.category as any).name
+    : ad.category;
+
+  // Проверяем, является ли текущий пользователь владельцем объявления
+  const isCurrentUserOwner = isOwner(ad.userId);
+  
+  // Проверяем, находится ли товар уже в корзине
+  const isInCartNow = isInCart(ad.id);
+
+  const handleAddToCart = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    await addToCart(ad.id, ad.userId);
+  };
+
+  const handleGoToCart = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    openCart();
+  };
 
   return (
-    <Card 
+    <Card
       className="cursor-pointer hover:shadow-md transition-shadow"
       onClick={() => onClick(ad)}
     >
       <div className="aspect-w-16 aspect-h-12">
         <img
-          src={ad.images[0] || "https://via.placeholder.com/400x300"}
+          src={firstImagePath}
           alt={ad.title}
           className="w-full h-48 object-cover rounded-t-lg"
         />
@@ -33,19 +63,50 @@ export function AdCard({ ad, onClick }: AdCardProps) {
         </p>
         <div className="flex justify-between items-center mb-2">
           <span className="text-2xl font-bold text-primary">
-            ${parseFloat(ad.price).toLocaleString()}
+            {parseFloat(ad.price).toLocaleString() + " руб." }
           </span>
           <Badge variant="secondary" className="text-xs">
-            {ad.category}
+            {categoryName || 'Категория'}
           </Badge>
         </div>
-        <div className="flex items-center text-sm text-gray-500">
+        <div className="flex items-center text-sm text-gray-500 mb-3">
           <MapPin className="h-4 w-4 mr-1" />
           <span>{ad.location}</span>
           <span className="mx-2">•</span>
           <Clock className="h-4 w-4 mr-1" />
           <span>{timeAgo}</span>
         </div>
+        
+        {/* Кнопка действия */}
+        {!isCurrentUserOwner ? (
+          isInCartNow ? (
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={handleGoToCart}
+            >
+              <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+              Перейти в корзину
+            </Button>
+          ) : (
+            <Button
+              className="w-full"
+              onClick={handleAddToCart}
+            >
+              <ShoppingCart className="mr-2 h-4 w-4" />
+              Добавить в корзину
+            </Button>
+          )
+        ) : (
+          <Button
+            className="w-full"
+            disabled
+            variant="secondary"
+          >
+            <ShoppingCart className="mr-2 h-4 w-4" />
+            Ваше объявление
+          </Button>
+        )}
       </CardContent>
     </Card>
   );

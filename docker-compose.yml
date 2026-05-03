@@ -1,13 +1,61 @@
 version: '3.8'
 
 services:
-  app:
-    build: .
+  # PostgreSQL database
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=StrongPass123!
+      - POSTGRES_DB=freemarketboards
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - freemarketboard-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d freemarketboards"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend server (API)
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "5000:5000"
     environment:
-      - NODE_ENV=develop
-      - DATABASE_URL=postgres://admin:qwerty123@host.docker.internal:32768/postgres
-      - JWT_SECRET=your-secret-key
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - NODE_ENV=production
+      - DATABASE_URL=postgres://admin:StrongPass123!@postgres:5432/freemarketboards
+      - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+      - CLIENT_URL=http://client:3001
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - freemarketboard-network
+
+  # Frontend client
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    ports:
+      - "3001:3001"
+    environment:
+      - VITE_API_URL=http://localhost:5000
+      - VITE_CLIENT_URL=http://localhost:3001
+    depends_on:
+      - server
+    networks:
+      - freemarketboard-network
+
+volumes:
+  postgres_data:
+
+networks:
+  freemarketboard-network:
+    driver: bridge

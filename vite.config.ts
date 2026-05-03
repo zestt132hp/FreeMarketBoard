@@ -37,6 +37,12 @@ export default defineConfig({
   server: {
     host: true,  // Для работы в Docker
     port: 3000,  // Порт для dev-сервера
-    strictPort: true
+    strictPort: true,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+      }
+    }
   }
 });

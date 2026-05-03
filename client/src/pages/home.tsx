@@ -4,21 +4,41 @@ import { Header } from "@/components/header";
 import { CategoryNav } from "@/components/category-nav";
 import { AdCard } from "@/components/ad-card";
 import { AdDetailModal } from "@/components/ad-detail-modal";
+import { FiltersPanel } from "@/components/filters-panel";
+import { LocationFilterButton } from "@/components/location-filter-button";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { Ad } from "../../../shared/schema";
+import { Filter } from "lucide-react";
+import type { Ad, Category, AdWithRelations } from "../../../shared/schema";
 import { logger } from '@/lib/logger';
+import { getApiUrl } from "@/lib/queryClient";
+import { useFiltersLocalStorage, type FilterState } from "@/hooks/use-filters-local-storage";
 
 export default function Home() {
   const [selectedCategory, setSelectedCategory] = useState("all");
-  const [selectedAd, setSelectedAd] = useState<(Ad & { seller?: any }) | null>(null);
+  const [selectedAd, setSelectedAd] = useState<AdWithRelations | null>(null);
   const [showAdDetail, setShowAdDetail] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [priceFilter, setPriceFilter] = useState("any");
-  const [locationFilter, setLocationFilter] = useState("");
-  const [sortBy, setSortBy] = useState("recent");
+  
+  // Используем хук для работы с localStorage
+  const { filters, updateFilter, resetFilters, activeFiltersCount } = useFiltersLocalStorage();
+  
+  // Состояние для панели фильтров (мобильные)
+  const [showFiltersPanel, setShowFiltersPanel] = useState(false);
+  const [tempFilters, setTempFilters] = useState<FilterState>(filters);
+
+  // Fetch categories
+  const { data: categories = [] } = useQuery<Category[]>({
+    queryKey: ["/api/categories"],
+    queryFn: async () => {
+      const response = await fetch(getApiUrl("/api/categories"));
+      if (!response.ok) throw new Error("Failed to fetch categories");
+      return response.json();
+    },
+  });
 
   // Fetch ads
   const { data: ads = [], isLoading } = useQuery({
@@ -28,7 +48,7 @@ export default function Home() {
       if (selectedCategory !== "all") params.append("category", selectedCategory);
       if (searchTerm) params.append("search", searchTerm);
       
-      const response = await fetch(`/api/ads?${params}`);
+      const response = await fetch(getApiUrl(`/api/ads?${params}`));
       if (!response.ok) throw new Error("Failed to fetch ads");
       return response.json();
     },
@@ -39,10 +59,10 @@ export default function Home() {
     let filtered = [...ads];
 
     // Price filter
-    if (priceFilter && priceFilter !== "any") {
-      const [min, max] = priceFilter === "1000+" 
-        ? [1000, Infinity] 
-        : priceFilter.split("-").map(Number);
+    if (filters.priceFilter && filters.priceFilter !== "any") {
+      const [min, max] = filters.priceFilter === "1000+"
+        ? [1000, Infinity]
+        : filters.priceFilter.split("-").map(Number);
       
       filtered = filtered.filter(ad => {
         const price = parseFloat(ad.price);
@@ -51,15 +71,15 @@ export default function Home() {
     }
 
     // Location filter
-    if (locationFilter) {
-      filtered = filtered.filter(ad => 
-        ad.location.toLowerCase().includes(locationFilter.toLowerCase())
+    if (filters.locationFilter) {
+      filtered = filtered.filter(ad =>
+        ad.location.toLowerCase().includes(filters.locationFilter.toLowerCase())
       );
     }
 
     // Sort
     filtered.sort((a, b) => {
-      switch (sortBy) {
+      switch (filters.sortBy) {
         case "price-low":
           return parseFloat(a.price) - parseFloat(b.price);
         case "price-high":
@@ -71,11 +91,11 @@ export default function Home() {
     });
 
     return filtered;
-  }, [ads, priceFilter, locationFilter, sortBy]);
+  }, [ads, filters.priceFilter, filters.locationFilter, filters.sortBy]);
 
   const handleAdClick = async (ad: Ad) => {
     try {
-      const response = await fetch(`/api/ads/${ad.id}`);
+      const response = await fetch(getApiUrl(`/api/ads/${ad.id}`));
       if (response.ok) {
         const adWithSeller = await response.json();
         setSelectedAd(adWithSeller);
@@ -93,41 +113,72 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Header searchTerm={searchTerm} onSearchChange={setSearchTerm} />
-      <CategoryNav selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory} />
+      <CategoryNav selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory} categories={categories} />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Filters */}
-        <div className="mb-6">
+        {/* Mobile Filters Button - visible only on mobile */}
+        <div className="md:hidden mb-4">
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => {
+              setTempFilters(filters);
+              setShowFiltersPanel(true);
+            }}
+          >
+            <Filter className="h-4 w-4 mr-2" />
+            Фильтры
+            {activeFiltersCount() > 0 && (
+              <Badge variant="secondary" className="ml-2 h-5 w-5 p-0 flex items-center justify-center">
+                {activeFiltersCount()}
+              </Badge>
+            )}
+          </Button>
+        </div>
+
+        {/* Desktop Filters - hidden on mobile */}
+        <div className="mb-6 hidden md:block">
           <div className="bg-white p-4 rounded-lg shadow-sm">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
                 <Label className="text-sm font-medium text-gray-700">Цена:</Label>
-                <Select value={priceFilter} onValueChange={setPriceFilter}>
+                <Select value={filters.priceFilter} onValueChange={(value) => updateFilter('priceFilter', value)}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Any Price" />
+                    <SelectValue placeholder="Любая цена" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="any">Любая Цена</SelectItem>
-                    <SelectItem value="0-100">$0 - $100</SelectItem>
-                    <SelectItem value="100-500">$100 - $500</SelectItem>
-                    <SelectItem value="500-1000">$500 - $1000</SelectItem>
-                    <SelectItem value="1000+">$1000+</SelectItem>
+                    <SelectItem value="any">Любая цена</SelectItem>
+                    <SelectItem value="0-100">0 - 100 ₽</SelectItem>
+                    <SelectItem value="100-500">100 - 500 ₽</SelectItem>
+                    <SelectItem value="500-1000">500 - 1000 ₽</SelectItem>
+                    <SelectItem value="1000+">1000+ ₽</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div>
                 <Label className="text-sm font-medium text-gray-700">Местоположение:</Label>
-                <Input
-                  placeholder="Введите город..."
-                  value={locationFilter}
-                  onChange={(e) => setLocationFilter(e.target.value)}
-                />
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Введите город..."
+                    value={filters.locationFilter}
+                    onChange={(e) => updateFilter('locationFilter', e.target.value)}
+                    className="flex-1"
+                  />
+                  <LocationFilterButton
+                    onLocationFound={(address) => {
+                      updateFilter('locationFilter', address);
+                    }}
+                    onError={(error) => {
+                      logger.error('Geolocation error', error);
+                    }}
+                  />
+                </div>
               </div>
 
               <div>
                 <Label className="text-sm font-medium text-gray-700">Сортировать:</Label>
-                <Select value={sortBy} onValueChange={setSortBy}>
+                <Select value={filters.sortBy} onValueChange={(value) => updateFilter('sortBy', value)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -142,11 +193,7 @@ export default function Home() {
               <div className="flex items-end">
                 <Button
                   variant="outline"
-                  onClick={() => {
-                    setPriceFilter("any");
-                    setLocationFilter("");
-                    setSortBy("recent");
-                  }}
+                  onClick={resetFilters}
                 >
                   Очистить фильтр
                 </Button>
@@ -158,7 +205,7 @@ export default function Home() {
         {/* Ad Listings */}
         {isLoading ? (
           <div className="flex items-center justify-center h-64">
-            <p>Loading ads...</p>
+            <p>Загрузка объявлений...</p>
           </div>
         ) : filteredAds.length === 0 ? (
           <div className="flex items-center justify-center h-64">
@@ -175,6 +222,28 @@ export default function Home() {
           </div>
         )}
       </main>
+
+      {/* Mobile Filters Panel */}
+      <FiltersPanel
+        isOpen={showFiltersPanel}
+        onOpenChange={setShowFiltersPanel}
+        filters={filters}
+        tempFilters={tempFilters}
+        onTempFiltersChange={setTempFilters}
+        onApply={() => {
+          updateFilter('priceFilter', tempFilters.priceFilter);
+          updateFilter('locationFilter', tempFilters.locationFilter);
+          updateFilter('sortBy', tempFilters.sortBy);
+        }}
+        onReset={() => {
+          resetFilters();
+          setTempFilters({
+            priceFilter: 'any',
+            locationFilter: '',
+            sortBy: 'recent',
+          });
+        }}
+      />
 
       <AdDetailModal
         isOpen={showAdDetail}

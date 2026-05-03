@@ -1,25 +1,21 @@
-# Этап сборки
-FROM node:20-alpine AS builder
+# Этап сборки сервера
+FROM node:20-bullseye AS server-builder
 
 WORKDIR /app
 COPY package*.json ./
+COPY server/ ./server/
 COPY shared/ ./shared/
-COPY vite.config.ts ./
-RUN npm install
-COPY . .
-RUN npm run build
+RUN npm install --no-optional
 
-# Финальный образ
-FROM node:20-alpine
+# Финальный образ для сервера
+FROM node:20-bullseye
 WORKDIR /app
 
-# Копируем ВСЕ необходимые файлы
-COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/server ./server
-COPY --from=builder /app/shared ./shared
-COPY --from=builder /app/vite.config.ts ./
-COPY --from=builder /app/dist ./dist
+# Копируем необходимые файлы сервера
+COPY --from=server-builder /app/package*.json ./
+COPY --from=server-builder /app/node_modules ./node_modules
+COPY --from=server-builder /app/server ./server
+COPY --from=server-builder /app/shared ./shared
 
 EXPOSE 5000
 CMD ["npx", "tsx", "server/index.ts"]

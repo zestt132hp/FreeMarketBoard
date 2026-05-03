@@ -19,5 +19,6 @@
       "@/*": ["./client/src/*"],
       "@shared/*": ["../shared/*"]
     }
-  }
+  },
+  "typeRoots": ["./client/src/types", "./node_modules/@types"]
 }

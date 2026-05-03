@@ -3,51 +3,69 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { 
-  ShoppingCart, 
-  Phone, 
-  MapPin, 
-  Clock, 
-  ChevronLeft, 
+import {
+  ShoppingCart,
+  Phone,
+  MapPin,
+  Clock,
+  ChevronLeft,
   ChevronRight,
   Star,
-  User
+  User,
+  CheckCircle
 } from "lucide-react";
-import type { Ad } from "../../../shared/schema";
+import type { Ad, Image as AdImage } from "../../../shared/schema";
 import { useCart } from "@/hooks/use-cart";
+import { useAdSpecifications } from "@/hooks/use-specifications";
 import { formatDistanceToNow } from "date-fns";
+import { LocationView } from "@/components/location-view";
 
 interface AdDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
-  ad: Ad & { seller?: any } | null;
+  ad: (Ad & { seller?: any; images?: AdImage[]; category?: { name: string } }) | null;
 }
 
 export function AdDetailModal({ isOpen, onClose, ad }: AdDetailModalProps) {
-  const { addToCart } = useCart();
+  const { addToCart, isOwner, isInCart, openCart } = useCart();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const { data: specifications } = useAdSpecifications(ad?.id ?? null);
 
   if (!ad) return null;
 
-  const specifications = JSON.parse(ad.specifications || '{}');
-  const timeAgo = ad.createdAt 
+  // Проверяем, является ли текущий пользователь владельцем объявления
+  const isCurrentUserOwner = isOwner(ad.userId);
+  
+  // Проверяем, находится ли товар уже в корзине
+  const isInCartNow = isInCart(ad.id);
+
+  // Use specifications from API or fallback to parsing JSON
+  const specsData = specifications || (ad.specifications ? JSON.parse(ad.specifications || '{}') : {});
+  const timeAgo = ad.createdAt
     ? formatDistanceToNow(new Date(ad.createdAt), { addSuffix: true })
-    : "Recently";
+    : "Недавно";
+
+  // Get image paths from the images array
+  const imagePaths = ad.images?.map(img => img.path) || [];
 
   const nextImage = () => {
     setCurrentImageIndex((prev) => 
-      prev === ad.images.length - 1 ? 0 : prev + 1
+      prev === imagePaths.length - 1 ? 0 : prev + 1
     );
   };
 
   const prevImage = () => {
     setCurrentImageIndex((prev) => 
-      prev === 0 ? ad.images.length - 1 : prev - 1
+      prev === 0 ? imagePaths.length - 1 : prev - 1
     );
   };
 
   const handleAddToCart = async () => {
     await addToCart(ad.id);
+  };
+
+  const handleGoToCart = () => {
+    openCart();
   };
 
   const handleContactSeller = () => {
@@ -69,11 +87,11 @@ export function AdDetailModal({ isOpen, onClose, ad }: AdDetailModalProps) {
             <div className="relative">
               <div className="relative h-96 bg-gray-200 rounded-lg overflow-hidden">
                 <img
-                  src={ad.images[currentImageIndex] || "https://via.placeholder.com/600x400"}
+                  src={imagePaths[currentImageIndex] || "https://via.placeholder.com/600x400"}
                   alt={ad.title}
                   className="w-full h-full object-cover"
                 />
-                {ad.images.length > 1 && (
+                {imagePaths.length > 1 && (
                   <>
                     <Button
                       variant="outline"
@@ -97,9 +115,9 @@ export function AdDetailModal({ isOpen, onClose, ad }: AdDetailModalProps) {
             </div>
 
             {/* Thumbnail Navigation */}
-            {ad.images.length > 1 && (
+            {imagePaths.length > 1 && (
               <div className="flex space-x-2 overflow-x-auto">
-                {ad.images.map((image, index) => (
+                {imagePaths.map((image, index) => (
                   <img
                     key={index}
                     src={image}
@@ -119,10 +137,10 @@ export function AdDetailModal({ isOpen, onClose, ad }: AdDetailModalProps) {
             <div>
               <div className="flex items-center justify-between mb-4">
                 <span className="text-3xl font-bold text-primary">
-                  ${parseFloat(ad.price).toLocaleString()}
+                  {parseFloat(ad.price).toLocaleString() + " руб."}
                 </span>
                 <Badge className="bg-blue-100 text-primary">
-                  {ad.category}
+                  {ad.category?.name || 'Категория'}
                 </Badge>
               </div>
 
@@ -136,16 +154,25 @@ export function AdDetailModal({ isOpen, onClose, ad }: AdDetailModalProps) {
             </div>
 
             {/* Product Specifications */}
-            {Object.keys(specifications).length > 0 && (
+            {specsData && ((Array.isArray(specsData) && specsData.length > 0) || (!Array.isArray(specsData) && Object.keys(specsData).length > 0)) && (
               <div>
                 <h3 className="text-lg font-semibold mb-3">Спецификация</h3>
                 <div className="space-y-2">
-                  {Object.entries(specifications).map(([key, value]) => (
-                    <div key={key} className="flex justify-between">
-                      <span className="text-gray-600 capitalize">{key}:</span>
-                      <span>{value as string}</span>
-                    </div>
-                  ))}
+                  {Array.isArray(specsData) ? (
+                    specsData.map((spec: any) => (
+                      <div key={spec.id || spec.templateId} className="flex justify-between">
+                        <span className="text-gray-600 capitalize">{spec.template?.label || spec.key}:</span>
+                        <span>{spec.value}</span>
+                      </div>
+                    ))
+                  ) : (
+                    Object.entries(specsData).map(([key, value]) => (
+                      <div key={key} className="flex justify-between">
+                        <span className="text-gray-600 capitalize">{key}:</span>
+                        <span>{value as string}</span>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             )}
@@ -162,13 +189,38 @@ export function AdDetailModal({ isOpen, onClose, ad }: AdDetailModalProps) {
 
             {/* Action Buttons */}
             <div className="space-y-3">
-              <Button
-                className="w-full"
-                onClick={handleAddToCart}
-              >
-                <ShoppingCart className="mr-2 h-4 w-4" />
-                Добавить в корзину
-              </Button>
+              {!isCurrentUserOwner && (
+                <>
+                  {isInCartNow ? (
+                    <Button
+                      className="w-full"
+                      variant="outline"
+                      onClick={handleGoToCart}
+                    >
+                      <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+                      Перейти в корзину
+                    </Button>
+                  ) : (
+                    <Button
+                      className="w-full"
+                      onClick={handleAddToCart}
+                    >
+                      <ShoppingCart className="mr-2 h-4 w-4" />
+                      Добавить в корзину
+                    </Button>
+                  )}
+                </>
+              )}
+              {isCurrentUserOwner && (
+                <Button
+                  className="w-full"
+                  disabled
+                  variant="secondary"
+                >
+                  <ShoppingCart className="mr-2 h-4 w-4" />
+                  Ваше объявление
+                </Button>
+              )}
               {ad.seller?.phone && (
                 <Button
                   variant="outline"
@@ -184,7 +236,7 @@ export function AdDetailModal({ isOpen, onClose, ad }: AdDetailModalProps) {
             {/* Seller Information */}
             {ad.seller && (
               <div className="p-4 bg-gray-50 rounded-lg">
-                <h4 className="font-semibold mb-2">Seller Information</h4>
+                <h4 className="font-semibold mb-2">Информация о продавце</h4>
                 <div className="space-y-2">
                   <div className="flex items-center">
                     <User className="h-4 w-4 mr-2 text-gray-600" />
@@ -203,16 +255,15 @@ export function AdDetailModal({ isOpen, onClose, ad }: AdDetailModalProps) {
               </div>
             )}
 
-            {/* Map Placeholder */}
+            {/* Map with LocationView */}
             <div>
-              <h4 className="font-semibold mb-3">Location</h4>
-              <div className="h-48 bg-gray-200 rounded-lg flex items-center justify-center">
-                <div className="text-center">
-                  <MapPin className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                  <p className="text-gray-500">Interactive Map</p>
-                  <p className="text-sm text-gray-400">{ad.location}</p>
-                </div>
-              </div>
+              <h4 className="font-semibold mb-3">Местоположение</h4>
+              <LocationView
+                latitude={ad.latitude ? parseFloat(ad.latitude as unknown as string) : 55.7558}
+                longitude={ad.longitude ? parseFloat(ad.longitude as unknown as string) : 37.6173}
+                address={ad.location}
+                adId={ad.id}
+              />
             </div>
           </div>
         </div>
