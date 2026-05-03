@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useCart } from "@/hooks/use-cart";
 import { AuthModal } from "./auth-modal";
 import { ShoppingCartComponent } from "./shopping-cart";
+import { AddToCartDialog } from "./add-to-cart-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,10 +23,18 @@ interface HeaderProps {
 
 export function Header({ searchTerm, onSearchChange }: HeaderProps) {
   const { user, isAuthenticated, logout } = useAuth();
-  const { cartCount } = useCart();
+  const { cartCount, isAddToCartDialogOpen, selectedCartItem, closeAddToCartDialog } = useCart();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [showCart, setShowCart] = useState(false);
+
+  // Устанавливаем глобальную функцию для открытия корзины
+  useEffect(() => {
+    (window as any).__openCart__ = () => setShowCart(true);
+    return () => {
+      delete (window as any).__openCart__;
+    };
+  }, []);
 
   const handleLogin = () => {
     setAuthMode("login");
@@ -200,6 +209,18 @@ export function Header({ searchTerm, onSearchChange }: HeaderProps) {
       <ShoppingCartComponent
         isOpen={showCart}
         onClose={() => setShowCart(false)}
+      />
+
+      <AddToCartDialog
+        open={isAddToCartDialogOpen}
+        onOpenChange={closeAddToCartDialog}
+        item={selectedCartItem}
+        onGoToCart={() => {
+          setShowCart(true);
+        }}
+        onContinueShopping={() => {
+          // Просто закрываем диалог
+        }}
       />
     </>
   );

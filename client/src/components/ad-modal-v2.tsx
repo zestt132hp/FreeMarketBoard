@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertAdSchema, adFormSchema, type Ad, type Category, type Image as AdImage } from "../../../shared/schema";
@@ -66,7 +66,7 @@ export default function AdModalV2({
 }: AdModalProps) {
   const [selectedCategorySlug, setSelectedCategorySlug] = useState<string>("electronics");
   const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
-  const [existingSpecs, setExistingSpecs] = useState<Record<string, any>>({});
+  const [specificationsData, setSpecificationsData] = useState<Array<{ templateId: number; key: string; value: string }>>([]);
   const { user } = useAuth();
 
   // Load specifications from API when editing an ad
@@ -80,25 +80,6 @@ export default function AdModalV2({
     },
     enabled: !!ad?.id && open,
   });
-
-  // Convert specifications from API to key-value format and update form
-  useEffect(() => {
-    if (specsData && Array.isArray(specsData)) {
-      const specsMap: Record<string, any> = {};
-      specsData.forEach((spec: any) => {
-        if (spec.template?.key) {
-          specsMap[spec.template.key] = spec.value;
-        }
-      });
-      setExistingSpecs(specsMap);
-      // Update form value when specs are loaded
-      if (ad && form) {
-        form.setValue("specifications", specsMap);
-      }
-    } else {
-      setExistingSpecs({});
-    }
-  }, [specsData, ad]);
 
   // Fetch categories
   const { data: categories = [] } = useQuery<Category[]>({
@@ -137,6 +118,16 @@ export default function AdModalV2({
         setSelectedCategorySlug(category.slug);
       }
       
+      // Convert specifications from API to key-value format (if loaded)
+      const specsMap: Record<string, any> = {};
+      if (specsData && Array.isArray(specsData)) {
+        specsData.forEach((spec: any) => {
+          if (spec.template?.key) {
+            specsMap[spec.template.key] = spec.value;
+          }
+        });
+      }
+      
       form.reset({
         title: ad.title,
         shortDescription: ad.shortDescription,
@@ -146,7 +137,7 @@ export default function AdModalV2({
         location: ad.location,
         latitude: ad.latitude || "",
         longitude: ad.longitude || "",
-        specifications: {},
+        specifications: specsMap,
         isActive: ad.isActive ?? true,
       });
       
@@ -184,11 +175,12 @@ export default function AdModalV2({
       setSelectedCategorySlug("electronics");
       setUploadedImages([]);
     }
-  }, [ad, open, form, categories]);
+  }, [ad, open, form, categories, specsData]);
 
   const handleSubmit = async (data: AdFormData) => {
     console.log('Form data submitted:', data);
     console.log('Uploaded images:', uploadedImages);
+    console.log('Specifications data:', specificationsData);
     
     try {
       // Проверяем, есть ли изображения
@@ -207,7 +199,9 @@ export default function AdModalV2({
         // Keep latitude and longitude as strings for decimal database fields
         latitude: data.latitude || null,
         longitude: data.longitude || null,
-        isActive: data.isActive ?? true
+        isActive: data.isActive ?? true,
+        // Add specificationsData for server-side saving
+        specificationsData: JSON.stringify(specificationsData)
       };
       
       console.log('Processed submit data:', submitData);
@@ -398,6 +392,10 @@ export default function AdModalV2({
               category={selectedCategorySlug}
               specifications={form.watch("specifications") || {}}
               onSpecificationsChange={(specs) => form.setValue("specifications", specs)}
+              onSpecificationsDataChange={useCallback((specsData: Array<{ templateId: number; key: string; value: string }>) => {
+                console.log('SpecificationsData changed:', specsData);
+                setSpecificationsData(specsData);
+              }, [])}
             />
 
             {/* Секция загрузки изображений */}

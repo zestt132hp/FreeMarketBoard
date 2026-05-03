@@ -11,7 +11,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Star,
-  User
+  User,
+  CheckCircle
 } from "lucide-react";
 import type { Ad, Image as AdImage } from "../../../shared/schema";
 import { useCart } from "@/hooks/use-cart";
@@ -26,7 +27,7 @@ interface AdDetailModalProps {
 }
 
 export function AdDetailModal({ isOpen, onClose, ad }: AdDetailModalProps) {
-  const { addToCart, isOwner } = useCart();
+  const { addToCart, isOwner, isInCart, openCart } = useCart();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const { data: specifications } = useAdSpecifications(ad?.id ?? null);
 
@@ -34,6 +35,9 @@ export function AdDetailModal({ isOpen, onClose, ad }: AdDetailModalProps) {
 
   // Проверяем, является ли текущий пользователь владельцем объявления
   const isCurrentUserOwner = isOwner(ad.userId);
+  
+  // Проверяем, находится ли товар уже в корзине
+  const isInCartNow = isInCart(ad.id);
 
   // Use specifications from API or fallback to parsing JSON
   const specsData = specifications || (ad.specifications ? JSON.parse(ad.specifications || '{}') : {});
@@ -58,6 +62,10 @@ export function AdDetailModal({ isOpen, onClose, ad }: AdDetailModalProps) {
 
   const handleAddToCart = async () => {
     await addToCart(ad.id);
+  };
+
+  const handleGoToCart = () => {
+    openCart();
   };
 
   const handleContactSeller = () => {
@@ -182,13 +190,26 @@ export function AdDetailModal({ isOpen, onClose, ad }: AdDetailModalProps) {
             {/* Action Buttons */}
             <div className="space-y-3">
               {!isCurrentUserOwner && (
-                <Button
-                  className="w-full"
-                  onClick={handleAddToCart}
-                >
-                  <ShoppingCart className="mr-2 h-4 w-4" />
-                  Добавить в корзину
-                </Button>
+                <>
+                  {isInCartNow ? (
+                    <Button
+                      className="w-full"
+                      variant="outline"
+                      onClick={handleGoToCart}
+                    >
+                      <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+                      Перейти в корзину
+                    </Button>
+                  ) : (
+                    <Button
+                      className="w-full"
+                      onClick={handleAddToCart}
+                    >
+                      <ShoppingCart className="mr-2 h-4 w-4" />
+                      Добавить в корзину
+                    </Button>
+                  )}
+                </>
               )}
               {isCurrentUserOwner && (
                 <Button

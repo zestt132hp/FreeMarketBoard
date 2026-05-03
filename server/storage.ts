@@ -31,6 +31,7 @@ export interface IStorage {
   
   // Image operations
   getImagesByAdId(adId: number): Promise<Image[]>;
+  getAdImages(adId: number): Promise<Image[]>;
   addImage(image: InsertImage): Promise<Image>;
   addImages(imagesData: InsertImage[]): Promise<Image[]>;
   deleteImagesByAdId(adId: number): Promise<boolean>;
@@ -358,6 +359,10 @@ export class MemStorage implements IStorage {
     return Array.from(this.cartItems.values()).filter(item => item.userId === userId);
   }
 
+  async getAdImages(adId: number): Promise<Image[]> {
+    return Array.from(this.images.values()).filter(img => img.adId === adId);
+  }
+
   async addToCart(insertCartItem: InsertCartItem): Promise<CartItem> {
     // Check if item already exists in cart
     const existing = Array.from(this.cartItems.values()).find(
@@ -641,6 +646,10 @@ export class DatabaseStorage implements IStorage {
   // Cart operations
   async getCartItems(userId: number): Promise<CartItem[]> {
     return await db.select().from(cartItems).where(eq(cartItems.userId, userId));
+  }
+
+  async getAdImages(adId: number): Promise<Image[]> {
+    return await db.select().from(images).where(eq(images.adId, adId));
   }
 
   async addToCart(insertCartItem: InsertCartItem): Promise<CartItem> {

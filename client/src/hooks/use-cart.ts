@@ -1,9 +1,16 @@
-import React, { createContext, useContext, ReactNode } from "react";
+import React, { createContext, useContext, ReactNode, useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { createAuthHeaders } from "@/lib/auth";
 import { useAuth } from "./use-auth";
 import { useToast } from "./use-toast";
+
+interface CartDialogItem {
+  adId: number;
+  title: string;
+  price: number;
+  imagePath: string;
+}
 
 interface CartContextType {
   cartItems: any[];
@@ -13,6 +20,14 @@ interface CartContextType {
   clearCart: () => Promise<void>;
   cartCount: number;
   isOwner: (adUserId: number | undefined) => boolean;
+  isInCart: (adId: number) => boolean;
+  // Диалоговое окно
+  isAddToCartDialogOpen: boolean;
+  selectedCartItem: CartDialogItem | null;
+  openAddToCartDialog: (item: CartDialogItem) => void;
+  closeAddToCartDialog: () => void;
+  // Открытие корзины
+  openCart: () => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -29,6 +44,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  
+  // Состояния для диалогового окна
+  const [isAddToCartDialogOpen, setIsAddToCartDialogOpen] = useState(false);
+  const [selectedCartItem, setSelectedCartItem] = useState<CartDialogItem | null>(null);
 
   const { data: cartItems = [], isLoading } = useQuery({
     queryKey: ["/api/cart"],
@@ -55,17 +74,27 @@ export function CartProvider({ children }: { children: ReactNode }) {
       const response = await apiRequest("POST", "/api/cart", { adId });
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: any, variables: { adId: number; adUserId?: number }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
-      toast({
-        title: "Added to cart",
-        description: "Item has been added to your cart.",
-      });
+      
+      // Проверяем, был ли товар уже в корзине до добавления
+      const wasInCart = cartItems.some((item: any) => item.adId === variables.adId);
+      
+      // Показываем диалог только если товара не было в корзине
+      if (!wasInCart && data) {
+        setSelectedCartItem({
+          adId: variables.adId,
+          title: data.title || "Товар",
+          price: data.price ? parseFloat(data.price) : 0,
+          imagePath: data.imagePath || "https://via.placeholder.com/80x80",
+        });
+        setIsAddToCartDialogOpen(true);
+      }
     },
     onError: (error: any) => {
-      const message = error?.message || "Failed to add item to cart.";
+      const message = error?.message || "Не удалось добавить товар в корзину.";
       toast({
-        title: message.includes("own ad") ? "Cannot add own ad" : "Error",
+        title: message.includes("own ad") ? "Нельзя добавить своё объявление" : "Ошибка",
         description: message,
         variant: "destructive",
       });
@@ -80,8 +109,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
       toast({
-        title: "Removed from cart",
-        description: "Item has been removed from your cart.",
+        title: "Удалено из корзины",
+        description: "Товар удалён из вашей корзины.",
       });
     },
   });
@@ -94,8 +123,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
       toast({
-        title: "Cart cleared",
-        description: "All items have been removed from your cart.",
+        title: "Корзина очищена",
+        description: "Все товары удалены из вашей корзины.",
       });
     },
   });
@@ -103,8 +132,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const addToCart = async (adId: number, adUserId?: number) => {
     if (!isAuthenticated) {
       toast({
-        title: "Please login",
-        description: "You need to be logged in to add items to cart.",
+        title: "Требуется вход",
+        description: "Для добавления товаров в корзину необходимо войти в систему.",
         variant: "destructive",
       });
       return;
@@ -116,6 +145,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
     return isAuthenticated && adUserId === (window as any).__CURRENT_USER_ID__;
   };
 
+  const isInCart = (adId: number): boolean => {
+    return cartItems.some((item: any) => item.adId === adId);
+  };
+
   const removeFromCart = async (adId: number) => {
     await removeFromCartMutation.mutateAsync(adId);
   };
@@ -123,6 +156,25 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const clearCart = async () => {
     await clearCartMutation.mutateAsync();
   };
+
+  // Функции для управления диалогом
+  const openAddToCartDialog = (item: CartDialogItem) => {
+    setSelectedCartItem(item);
+    setIsAddToCartDialogOpen(true);
+  };
+
+  const closeAddToCartDialog = () => {
+    setIsAddToCartDialogOpen(false);
+    setSelectedCartItem(null);
+  };
+
+  const openCart = useCallback(() => {
+    // Вызываем глобальную функцию открытия корзины, если она установлена
+    const openCartFn = (window as any).__openCart__;
+    if (openCartFn) {
+      openCartFn();
+    }
+  }, []);
 
   const contextValue: CartContextType = {
     cartItems,
@@ -132,6 +184,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
     clearCart,
     cartCount: cartItems.length,
     isOwner,
+    isInCart,
+    isAddToCartDialogOpen,
+    selectedCartItem,
+    openAddToCartDialog,
+    closeAddToCartDialog,
+    openCart,
   };
 
   return React.createElement(CartContext.Provider, { value: contextValue }, children);

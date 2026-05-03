@@ -1065,8 +1065,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       const cartItem = await storage.addToCart(cartData);
-      res.status(201).json(cartItem);
+      
+      // Получаем изображения для объявления
+      const adImages = await storage.getAdImages(adId);
+      const firstImagePath = adImages && adImages.length > 0 ? adImages[0].path : null;
+      
+      // Возвращаем данные объявления вместе с элементом корзины
+      res.status(201).json({
+        ...cartItem,
+        title: ad.title,
+        price: ad.price,
+        imagePath: firstImagePath || "https://via.placeholder.com/400x300",
+      });
     } catch (error) {
+      logger.error('Error adding to cart', { error });
       res.status(400).json({ message: "Invalid cart data" });
     }
   });

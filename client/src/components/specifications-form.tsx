@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import {
   FormControl,
   FormField,
@@ -18,29 +18,44 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { useSpecTemplates, useSpecOptions, type SpecificationTemplate } from "@/hooks/use-specifications";
 
+export interface SpecificationValue {
+  templateId: number;
+  key: string;
+  value: string;
+}
+
 interface SpecificationsFormProps {
   category: string;
   specifications?: Record<string, any>;
   onSpecificationsChange?: (specs: Record<string, any>) => void;
+  onSpecificationsDataChange?: (specsData: SpecificationValue[]) => void;
 }
 
 export default function SpecificationsForm({
   category,
   specifications = {},
   onSpecificationsChange,
+  onSpecificationsDataChange,
 }: SpecificationsFormProps) {
   const { data: templates, isLoading } = useSpecTemplates(category);
   const [specValues, setSpecValues] = useState<Record<string, string>>({});
 
-  // Initialize form values when templates are loaded or specifications change
+  // Initialize form values from specifications prop
   useEffect(() => {
     if (templates && !isLoading) {
       setSpecValues(prev => {
         const newValues: Record<string, string> = { ...prev };
+        let hasChanges = false;
+        
         templates.forEach((template: SpecificationTemplate) => {
           const currentValue = specifications[template.key];
+          const expectedValue = currentValue !== undefined ? String(currentValue) : '';
+          
           if (currentValue !== undefined) {
-            newValues[template.key] = String(currentValue);
+            if (newValues[template.key] !== expectedValue) {
+              newValues[template.key] = expectedValue;
+              hasChanges = true;
+            }
           } else if (!(template.key in newValues)) {
             // Set default values based on type only if not already set
             switch (template.type) {
@@ -59,10 +74,31 @@ export default function SpecificationsForm({
             }
           }
         });
-        return newValues;
+        
+        return hasChanges ? newValues : prev;
       });
     }
   }, [templates, isLoading, specifications]);
+
+  // Build specificationsData - memoized to avoid recalculations
+  const specificationsData = useMemo(() => {
+    if (!templates || isLoading) return [];
+    return templates
+      .filter((template: SpecificationTemplate) => specValues[template.key] !== undefined)
+      .map((template: SpecificationTemplate) => ({
+        templateId: template.id,
+        key: template.key,
+        value: specValues[template.key] || '',
+      }));
+  }, [templates, isLoading, specValues]);
+
+  // Notify parent about specificationsData change
+  useEffect(() => {
+    if (onSpecificationsDataChange && templates && !isLoading) {
+      console.log('useEffect - specificationsData:', specificationsData);
+      onSpecificationsDataChange(specificationsData);
+    }
+  }, [onSpecificationsDataChange, specificationsData, templates, isLoading]);
 
   const handleSpecChange = (key: string, value: string) => {
     const updatedSpecs = { ...specValues, [key]: value };
@@ -160,7 +196,7 @@ export default function SpecificationsForm({
             </SelectTrigger>
           </FormControl>
           <SelectContent>
-            {options?.map((option) => (
+            {options?.map((option: any) => (
               <SelectItem key={option.id} value={option.value}>
                 {option.value}
               </SelectItem>
@@ -188,7 +224,7 @@ export default function SpecificationsForm({
     <div className="space-y-4">
       <h3 className="text-lg font-semibold">Характеристики</h3>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {templates.map((template) => (
+        {templates.map((template: SpecificationTemplate) => (
           <div key={template.id} className="space-y-2">
             {renderSpecField(template)}
           </div>
