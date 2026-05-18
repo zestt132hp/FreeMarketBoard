@@ -132,8 +132,8 @@ export const specificationOptions = pgTable("specification_options", {
 // Ad specifications - actual values for each ad
 export const adSpecifications = pgTable("ad_specifications", {
   id: serial("id").notNull().primaryKey(),
-  adId: integer("ad_id").notNull().references(() => ads.id),
-  templateId: integer("template_id").notNull().references(() => specificationTemplates.id),
+  adId: integer("ad_id").notNull().references(() => ads.id, { onDelete: 'cascade' }),
+  templateId: integer("template_id").notNull().references(() => specificationTemplates.id, { onDelete: 'cascade' }),
   value: text("value").notNull(),
 });
 

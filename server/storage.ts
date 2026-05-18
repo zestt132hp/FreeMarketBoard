@@ -638,7 +638,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteAd(id: number): Promise<boolean> {
+    // Сначала удаляем спецификации (на случай если CASCADE не работает)
+    await db.delete(adSpecifications).where(eq(adSpecifications.adId, id));
+    
+    // Затем удаляем изображения
     await this.deleteImagesByAdId(id);
+    
+    // И наконец само объявление
     const result = await db.delete(ads).where(eq(ads.id, id));
     return (result.count || 0) > 0;
   }

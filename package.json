@@ -15,8 +15,13 @@
     "db:push": "drizzle-kit push",
     "logs": "tail -f logs/dashboard.log | pino-pretty",
     "dev:client": "vite dev --port 3001",
-    "dev:server": "npx tsx server/index.ts",
-    "dev:both": "concurrently \"npm run dev:server\" \"npm run dev:client\""
+    "dev:server": "node --import tsx/esm server/index.ts",
+    "dev:both": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "migrate:status": "npx tsx scripts/run-migrations.ts migrate:status",
+    "migrate:up": "npx tsx scripts/run-migrations.ts migrate:up",
+    "migrate:down": "npx tsx scripts/run-migrations.ts migrate:down",
+    "migrate:init": "npx tsx scripts/init-migrations-table.ts",
+    "generate:agent-rules": "npx tsx scripts/generate-agent-rules.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

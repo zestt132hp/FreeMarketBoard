@@ -1,0 +1,31 @@
+# Dockerfile для утилиты миграций базы данных
+FROM node:20-alpine
+
+# Установка рабочей директории
+WORKDIR /app
+
+# Копирование package.json и package-lock.json
+COPY package*.json ./
+
+# Установка зависимостей
+RUN npm ci --only=production
+
+# Копирование исходного кода
+COPY tsconfig.json ./
+COPY migrations/ ./migrations/
+COPY scripts/ ./scripts/
+COPY server/ ./server/
+COPY shared/ ./shared/
+
+# Копирование .env файла (если существует)
+COPY .env* ./
+
+# Установка tsx для выполнения TypeScript скриптов
+RUN npm install -g tsx
+
+# Переменные окружения
+ENV NODE_ENV=production
+ENV MIGRATIONS_FOLDER=/app/migrations
+
+# Команда по умолчанию - показать статус миграций
+CMD ["npx", "tsx", "scripts/run-migrations.ts", "migrate:status"]
