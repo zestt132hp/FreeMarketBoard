@@ -5,6 +5,7 @@ WORKDIR /app
 COPY package*.json ./
 COPY server/ ./server/
 COPY shared/ ./shared/
+COPY vite.config.ts ./
 RUN npm install --no-optional
 
 # Финальный образ для сервера
