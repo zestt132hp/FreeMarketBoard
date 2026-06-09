@@ -458,6 +458,208 @@ networks:
 | quantity | INTEGER DEFAULT 1 | Количество |
 | image_path | TEXT | Путь к изображению |
 
+### Архитектура взаимодействия с базой данных
+
+```mermaid
+flowchart LR
+    Client[Клиент (React)]
+    API[API Server (Express)]
+    Drizzle[Drizzle ORM]
+    Driver[PostgreSQL Driver (postgres.js)]
+    DB[(PostgreSQL DB)]
+
+    Client -->|HTTP запрос| API
+    API -->|SQL запрос| Drizzle
+    Drizzle -->|Вызов функции| Driver
+    Driver -->|TCP/IP запрос| DB
+    DB -->|Результ| Driver
+    Driver -->|Результ| Drizzle
+    Drizzle -->|Объекты TypeScript| API
+    API -->|JSON ответ| Client
+```
+
+**Описание компонентов:**
+
+| Компонент | Описание |
+|-----------|----------|
+| **Клиент (React)** | Фронтенд приложение, отправляющее HTTP запросы через TanStack Query |
+| **API Server (Express)** | Бэкенд сервер на порту 5000, обрабатывающий запросы и выполняющий бизнес-логику |
+| **Drizzle ORM** | Типобезопасная ORM, преобразующая вызовы TypeScript в SQL запросы |
+| **PostgreSQL Driver (postgres.js)** | Драйвер для подключения к PostgreSQL, выполняющий TCP/IP запросы к БД |
+| **PostgreSQL DB** | Реляционная база данных на порту 5432, хранящая данные приложения |
+
+**Поток данных:**
+1. Клиент отправляет HTTP запрос (например, `GET /api/ads`)
+2. Express сервер принимает запрос и вызывает метод хранилища (`storage.getAds()`)
+3. Drizzle ORM генерирует SQL запрос на основе схемы
+4. PostgreSQL driver отправляет запрос в базу данных
+5. PostgreSQL выполняет запрос и возвращает результат
+6. Drizzle ORM преобразует результат в TypeScript объекты
+7. Express сервер возвращает JSON ответ клиенту
+
+### ER-диаграмма базы данных
+
+```mermaid
+erDiagram
+  USERS ||--o{ ADS : "создаёт"
+  USERS ||--o{ CART_ITEMS : "содержит"
+  USERS ||--o{ ORDERS : "оформляет"
+  USERS ||--o{ ADDRESSES : "сохраняет"
+  
+  CATEGORIES ||--o{ ADS : "включает"
+  CATEGORIES ||--o{ SPECIFICATION_TEMPLATES : "определяет"
+  CATEGORIES }o--|| CATEGORIES : "иерархия (parent)"
+  
+  ADS ||--o{ IMAGES : "имеет"
+  ADS ||--o{ AD_SPECIFICATIONS : "содержит"
+  ADS ||--o{ CART_ITEMS : "добавляется в"
+  ADS ||--o{ ORDER_ITEMS : "включается в"
+  
+  SPECIFICATION_TEMPLATES ||--o{ SPECIFICATION_OPTIONS : "имеет"
+  SPECIFICATION_TEMPLATES ||--o{ AD_SPECIFICATIONS : "заполняется"
+  
+  ORDERS ||--o{ ORDER_ITEMS : "содержит"
+  ORDERS }o--|| ADDRESSES : "доставка по адресу"
+  
+  USERS {
+      int id PK
+      text name
+      text phone UK
+      text password
+      timestamp created_at
+  }
+  
+  CATEGORIES {
+      int id PK
+      text name
+      text icon
+      text slug UK
+      int parent_id FK
+  }
+  
+  ADS {
+      int id PK
+      text title
+      text short_description
+      text full_description
+      decimal price
+      int category_id FK
+      text location
+      decimal latitude
+      decimal longitude
+      text specifications
+      int user_id FK
+      boolean is_active
+      timestamp created_at
+  }
+  
+  IMAGES {
+      int id PK
+      text path
+      int ad_id FK
+      int order
+      boolean is_primary
+  }
+  
+  CART_ITEMS {
+      int id PK
+      int user_id FK
+      int ad_id FK
+      timestamp created_at
+  }
+  
+  ADDRESSES {
+      int id PK
+      int user_id FK
+      text recipient_name
+      text recipient_phone
+      text recipient_email
+      text region
+      text city
+      text district
+      text street
+      text building
+      text apartment
+      boolean is_default
+      timestamp created_at
+  }
+  
+  ORDERS {
+      int id PK
+      int user_id FK
+      text status
+      decimal total_amount
+      text payment_method
+      text delivery_method
+      text recipient_name
+      text recipient_phone
+      text recipient_email
+      text delivery_region
+      text delivery_city
+      text delivery_district
+      text delivery_street
+      text delivery_building
+      text delivery_apartment
+      int address_id FK
+      text qr_code
+      timestamp created_at
+  }
+  
+  ORDER_ITEMS {
+      int id PK
+      int order_id FK
+      int ad_id FK
+      text title
+      decimal price
+      int quantity
+      text image_path
+  }
+  
+  SPECIFICATION_TEMPLATES {
+      int id PK
+      int category_id FK
+      text key
+      text label
+      text type
+      boolean required
+      text placeholder
+  }
+  
+  SPECIFICATION_OPTIONS {
+      int id PK`
+      int template_id FK
+      text value
+      int sort_order
+  }
+  
+  AD_SPECIFICATIONS {
+      int id PK
+      int ad_id FK
+      int template_id FK
+      text value
+  }
+```
+
+**Описание связей:**
+
+| Связь | Тип | Описание |
+|-------|-----|----------|
+| USERS → ADS | 1:N | Пользователь создаёт множество объявлений |
+| USERS → CART_ITEMS | 1:N | Пользователь имеет корзину с товарами |
+| USERS → ORDERS | 1:N | Пользователь оформляет заказы |
+| USERS → ADDRESSES | 1:N | Пользователь сохраняет адреса доставки |
+| CATEGORIES → ADS | 1:N | Категория содержит объявления |
+| CATEGORIES → SPECIFICATION_TEMPLATES | 1:N | Категория определяет шаблоны спецификаций |
+| CATEGORIES → CATEGORIES | N:1 | Иерархия категорий (родительская) |
+| ADS → IMAGES | 1:N | Объявление имеет изображения |
+| ADS → AD_SPECIFICATIONS | 1:N | Объявление содержит спецификации |
+| ADS → CART_ITEMS | 1:N | Объявление добавляется в корзину |
+| ADS → ORDER_ITEMS | 1:N | Объявление включается в заказ |
+| SPECIFICATION_TEMPLATES → SPECIFICATION_OPTIONS | 1:N | Шаблон имеет опции для select |
+| SPECIFICATION_TEMPLATES → AD_SPECIFICATIONS | 1:N | Шаблон заполняется значениями |
+| ORDERS → ORDER_ITEMS | 1:N | Заказ содержит элементы |
+| ORDERS → ADDRESSES | N:1 | Заказ доставляется по адресу |
+
 ### Миграции базы данных
 
 Миграции хранятся в папке [`migrations/`](migrations/):
@@ -471,16 +673,32 @@ networks:
 | [`0005_restore_data.sql`](migrations/0005_restore_data.sql) | Восстановление данных |
 | [`0006_migrate_json_specs.sql`](migrations/0006_migrate_json_specs.sql) | Миграция JSON спецификаций |
 | [`0007_add_orders_and_addresses.sql`](migrations/0007_add_orders_and_addresses.sql) | Таблицы заказов и адресов |
+| [`0008_create_migrations_table.sql`](migrations/0008_create_migrations_table.sql) | Таблица отслеживания миграций (_migrations) |
+| [`0009_fix_ad_specifications_fk.sql`](migrations/0009_fix_ad_specifications_fk.sql) | Исправление FK с ON DELETE CASCADE |
 
-### Применение миграций
+### Система миграций
+
+Начиная с миграции 0008, используется система с отслеживанием версий в таблице `_migrations`. Каждая миграция содержит секции UP (применение) и DOWN (откат).
+
+**Команды управления миграциями:**
 
 ```bash
-# Автоматическое применение миграций
-npm run db:push
+# Показать статус всех миграций
+npm run migrate:status
 
-# Ручное применение через скрипт
-npx tsx scripts/apply-migration.ts
+# Применить все ожидающие миграции
+npm run migrate:up
+
+# Откатить последнюю миграцию
+npm run migrate:down -- --count=1
+
+# Инициализировать таблицу миграций (для существующей БД)
+npm run migrate:init
 ```
+
+**Docker Compose:** Миграции автоматически применяются перед запуском сервера через сервис `migrator`.
+
+Подробная документация: [`MIGRATIONS_GUIDE.md`](MIGRATIONS_GUIDE.md)
 
 ### Подключение к базе данных
 
@@ -714,6 +932,91 @@ app.post("/api/orders", authenticateToken, async (req, res) => {
 2. Настроить webhook для получения статуса оплаты
 3. Заменить mock QR на реальный от платёжной системы
 4. Реализовать обработку успешной/неуспешной оплаты
+
+---
+
+## 7.1 Схема взаимодействия с внешними системами
+
+```mermaid
+flowchart TB
+    subgraph Client["Клиентская часть"]
+        Browser[Браузер пользователя]
+        React[React приложение]
+        YMaps[Яндекс Карты API]
+    end
+
+    subgraph Server["Серверная часть"]
+        Express[Express API Server]
+        Multer[Multer Upload]
+        Sharp[Sharp Image Processing]
+        JWT[JWT Auth]
+    end
+
+    subgraph External["Внешние сервисы"]
+        YandexGeo[Яндекс Геокодинг API]
+        YandexMaps[Яндекс Карты API]
+        Payment[Платёжная система СБП]
+    end
+
+    subgraph Storage["Хранение данных"]
+        PostgreSQL[(PostgreSQL Database)]
+        FileSystem[Файловая система]
+    end
+
+    Browser <-->|HTTPS| React
+    React <-->|HTTP запросы| Express
+    React <-->|JavaScript API| YMaps
+    
+    Express <-->|REST API| YandexGeo
+    Express <-->|REST API| YandexMaps
+    Express <-->|API/Webhook| Payment
+    
+    Express <-->|Drizzle ORM| PostgreSQL
+    Express <-->|File I/O| Multer
+    Multer <-->|Process| Sharp
+    Sharp <-->|Save| FileSystem
+    
+    YMaps <-->|API Calls| YandexMaps
+```
+
+### Описание внешних интеграций
+
+| Внешняя система | Назначение | API эндпоинты | Метод интеграции |
+|-----------------|------------|---------------|------------------|
+| **Яндекс Геокодинг** | Преобразование координат в адрес | `/api/geocode` | REST API через сервер |
+| **Яндекс Карты** | Отображение карт, построение маршрутов | `/api/route` | JavaScript API + REST API |
+| **Платёжная система СБП** | Приём платежей по QR коду | `/api/orders` | REST API + Webhook |
+
+### Поток данных при геокодинге
+
+```
+Клиент → Express Server → Яндекс Геокодинг API → Express Server → Клиент
+     (координаты)        (HTTP запрос)         (адрес)         (JSON ответ)
+```
+
+### Поток данных при оплате
+
+```
+Клиент → Express Server → Платёжная система → QR код → Клиент
+     (заказ)            (генерация QR)      (возврат)  (отображение)
+     
+Клиент → Мобильное приложение банка → Платёжная система → Webhook → Express Server → Клиент
+     (сканирование QR)              (оплата)          (статус)    (обновление заказа)
+```
+
+### Переменные окружения для внешних сервисов
+
+```env
+# Яндекс Карты API ключ
+VITE_YANDEX_MAPS_API_KEY=ваш-api-ключ
+
+# Серверный ключ для геокодинга (если требуется)
+YANDEX_GEOCODING_API_KEY=ваш-api-ключ
+
+# Платёжная система (для продакшена)
+PAYMENT_API_KEY=ваш-api-ключ
+PAYMENT_WEBHOOK_SECRET=секрет-вебхука
+```
 
 ---
 

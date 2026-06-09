@@ -20,6 +20,24 @@ services:
       timeout: 5s
       retries: 5
 
+  # Migration runner (applies database migrations)
+  migrator:
+    build:
+      context: .
+      dockerfile: Dockerfile.migrator
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgres://admin:StrongPass123!@postgres:5432/freemarketboards
+      - MIGRATIONS_FOLDER=/app/migrations
+      - LOG_LEVEL=Information
+      - AUTO_APPLY_MIGRATIONS=false
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - freemarketboard-network
+    command: ["npx", "tsx", "scripts/run-migrations.ts", "migrate:up"]
+
   # Backend server (API)
   server:
     build:
@@ -32,9 +50,12 @@ services:
       - DATABASE_URL=postgres://admin:StrongPass123!@postgres:5432/freemarketboards
       - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
       - CLIENT_URL=http://client:3001
+      - AUTO_APPLY_MIGRATIONS=false
     depends_on:
       postgres:
         condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
     networks:
       - freemarketboard-network
 

@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  # Backend server (API) - требует внешнюю БД
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=production
+      # Укажите вашу внешнюю базу данных здесь
+      - DATABASE_URL=postgres://admin:StrongPass123!@host.docker.internal:5432/freemarketboards
+      - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+      - AUTO_APPLY_MIGRATIONS=false
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # Frontend client
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    ports:
+      - "3001:3001"
+    environment:
+      - VITE_API_URL=http://localhost:5000
+      - VITE_CLIENT_URL=http://localhost:3001
+    depends_on:
+      - server
+
+networks:
+  freemarketboard-network:
+    driver: bridge

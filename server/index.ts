@@ -3,6 +3,8 @@ import cors from "cors";
 // @ts-ignore - @types/cors may not be installed
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { MigrationRunner } from "./migration-runner";
+import { MigrationConfig } from "./migration-types";
 
 const app = express();
 
@@ -46,6 +48,31 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Optionally apply migrations on startup
+  const autoApplyMigrations = process.env.AUTO_APPLY_MIGRATIONS === 'true';
+  
+  if (autoApplyMigrations) {
+    log('Auto-applying database migrations...', 'Migration');
+    
+    try {
+      const config: MigrationConfig = {
+        connectionString: process.env.DATABASE_URL || 'postgres://admin:StrongPass123!@localhost:5432/freemarketboards',
+        migrationsFolder: process.env.MIGRATIONS_FOLDER || './migrations',
+        logLevel: (process.env.LOG_LEVEL as any) || 'Information',
+        autoApplyOnStart: true,
+      };
+      
+      const runner = new MigrationRunner(config);
+      const appliedCount = await runner.applyAllMigrations();
+      await runner.close();
+      
+      log(`Applied ${appliedCount} migration(s)`, 'Migration');
+    } catch (error) {
+      log(`Migration error: ${error instanceof Error ? error.message : String(error)}`, 'Error');
+      // Don't fail startup, just log the error
+    }
+  }
+
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
