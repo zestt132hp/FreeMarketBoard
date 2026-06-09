@@ -7,8 +7,8 @@ WORKDIR /app
 # Копирование package.json и package-lock.json
 COPY package*.json ./
 
-# Установка зависимостей
-RUN npm ci --only=production
+# Установка production-зависимостей
+RUN npm ci --omit=dev
 
 # Копирование исходного кода
 COPY tsconfig.json ./
