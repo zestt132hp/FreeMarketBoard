@@ -8,8 +8,6 @@ services:
       - POSTGRES_USER=admin
       - POSTGRES_PASSWORD=StrongPass123!
       - POSTGRES_DB=freemarketboards
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -43,13 +41,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - "5000:5000"
+    expose:
+      - "5000"
     environment:
       - NODE_ENV=production
       - DATABASE_URL=postgres://admin:StrongPass123!@postgres:5432/freemarketboards
       - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
-      - CLIENT_URL=http://client:3001
       - AUTO_APPLY_MIGRATIONS=false
     depends_on:
       postgres:
@@ -59,18 +56,28 @@ services:
     networks:
       - freemarketboard-network
 
-  # Frontend client
+  # Frontend client (static files)
   client:
     build:
       context: .
       dockerfile: Dockerfile.client
-    ports:
-      - "3001:3001"
-    environment:
-      - VITE_API_URL=http://localhost:5000
-      - VITE_CLIENT_URL=http://localhost:3001
+    expose:
+      - "3001"
     depends_on:
       - server
+    networks:
+      - freemarketboard-network
+
+  # Nginx proxy (маршрутизация запросов)
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
+    ports:
+      - "80:80"
+    depends_on:
+      - server
+      - client
     networks:
       - freemarketboard-network
 

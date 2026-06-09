@@ -5,8 +5,7 @@ WORKDIR /app
 COPY package*.json ./
 COPY server/ ./server/
 COPY shared/ ./shared/
-COPY vite.config.ts ./
-RUN npm install --no-optional
+RUN npm ci --omit=dev
 
 # Финальный образ для сервера
 FROM node:20-bullseye
