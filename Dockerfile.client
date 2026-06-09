@@ -6,7 +6,7 @@ COPY package*.json ./
 COPY client/ ./client/
 COPY shared/ ./shared/
 COPY vite.config.ts ./
-RUN npm install --no-optional
+RUN npm install
 
 # Сборка клиента
 RUN npm run build
